@@ -292,9 +292,9 @@
     }
 </script>
 
-
-<!-- Block 3c: DLNA-Browser (Präzise Typen-Matrix anhand deiner XML-Rohdaten) -->
+<!-- Block 3c: DLNA-Browser (Exakte Key-basierte Navigation nach Bruno-Vorbild) -->
 <script>
+    // Nutzt das bewährte Key-Offset-Verfahren aus Bruno, um lückenlos alle Songs zu laden
     async function loadDLNAList() {
         const listContainer = document.getElementById('dlna-browser-list');
         try {
@@ -304,12 +304,14 @@
             globalTotalTracks = 0; 
             
             let allItems = [];
-            let currentOffset = -1;
+            let currentOffset = -1; // Startwert für die erste Seite
             let hasMore = true;
             let loopSafety = 0;
+            let seenKeys = new Set(); // Verhindert doppelte Einträge im UI
 
-            while (hasMore && loopSafety < 15) {
+            while (hasMore && loopSafety < 20) {
                 loopSafety++;
+                
                 let response = await fetch(`http://${radioIP}/fsapi/LIST_GET_NEXT/netRemote.nav.list/${currentOffset}?pin=${pin}&maxItems=30`);
                 let xmlText = await response.text();
                 
@@ -322,13 +324,27 @@
                     break;
                 }
 
-                items.forEach(item => { allItems.push(item); });
+                let newItemsCount = 0;
+                let lastValidKey = null;
 
-                if (items.length < 30) {
+                items.forEach(item => {
+                    const key = item.getAttribute("key");
+                    lastValidKey = key; // Merke den allerletzten Key dieser 30er-Gruppe
+
+                    // Nur hinzufügen, wenn wir diesen Key in dieser Session noch nicht gesehen haben
+                    if (!seenKeys.has(key)) {
+                        seenKeys.add(key);
+                        allItems.push(item);
+                        newItemsCount++;
+                    }
+                });
+
+                // Wenn keine neuen Items mehr dazukamen oder wir am Ende sind, Schleife beenden
+                if (items.length < 30 || newItemsCount === 0) {
                     hasMore = false;
-                } else {
-                    let lastKey = items[items.length - 1].getAttribute("key");
-                    currentOffset = lastKey;
+                } else if (lastValidKey !== null) {
+                    // EXAKT WIE IN BRUNO: Der neue Offset ist der exakte Key des letzten Elements (z.B. 29)
+                    currentOffset = lastValidKey;
                 }
             }
 
@@ -346,19 +362,16 @@
                 
                 const name = titleNode ? titleNode.textContent : (nameNode ? nameNode.textContent : "");
                 
-                // Extrahiere Typ und Subtyp aus den Feldern
                 const typeNode = item.querySelector("field[name='type'] value, field[name='type'] u8");
                 const subTypeNode = item.querySelector("field[name='subtype'] value, field[name='subtype'] u8");
                 
                 const typeVal = typeNode ? typeNode.textContent.trim() : "";
                 const subTypeVal = subTypeNode ? subTypeNode.textContent.trim() : "";
 
-                // 1. SCHUTZ-FILTER: Virtuelle Such-Einträge ("Search") radikal aussortieren
+                // Schutz-Filter: "Search"-Einträge verwerfen
                 if (name.trim() === "" || name.toLowerCase() === "search") return;
 
-                // 2. EXAKTE WEICHE ANHAND DEINER ROHDATEN:
-                // Wenn Typ "0" und Subtyp "0" -> Zwingend ein Navigations-Ordner (Directory)
-                // Wenn Typ "1" und Subtyp "3" -> Zwingend ein abspielbares Lied (Song)
+                // Weiche anhand deiner verifizierten XML-Rohdaten
                 const isDirectory = (typeVal === "0" && subTypeVal === "0"); 
 
                 const row = document.createElement('div');
@@ -390,6 +403,7 @@
                 listContainer.appendChild(row);
             });
             
+            // Setzt das Maximum sauber auf die korrekte Gesamtanzahl
             globalTotalTracks = trackIndexCounter;
             
             highlightCurrentTrackInList();
@@ -438,6 +452,7 @@
         }
     }
 </script>
+
 
 <!-- Block 3d: Multi-Highlighting im Schwebezustand (Teil 1) -->
 <script>
