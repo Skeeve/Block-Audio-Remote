@@ -42,6 +42,14 @@ Weboberfläche des Radios einblenden.
 
 ### Variante B: Als Userscript in der Radio-Weboberfläche
 
+**Schnellinstallation:** Mit installiertem Userscript-Manager (z. B.
+Tampermonkey oder Violentmonkey) einfach diesen Link öffnen:
+
+👉 [blockradio.user.js installieren](https://github.com/Skeeve/Block-Audio-Remote/raw/main/blockradio.user.js)
+
+Dann weiter mit Schritt 3. Die fertige Version verwendet die PIN `1234`. Wer
+eine andere PIN nutzt, baut das Userscript selbst:
+
 1. Userscript bauen:
    ```sh
    ./build-injector.sh
