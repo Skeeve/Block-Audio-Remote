@@ -223,7 +223,7 @@
     }
 </script>
 
-<!-- Block 3b: Power-Befehle (Mit echter 1 und automatischem Play-Weckruf) -->
+<!-- Block 3b: Power, Volume & Wiedergabe-Befehle (Mit Skip-Spurverfolgung) -->
 <script>
     let userWantsPowerOn = false;
 
@@ -238,7 +238,6 @@
         }
     }
 
-    // Nutzt jetzt beim Einschalten die "1" und setzt sofort den Play-Impuls hinterher
     async function togglePower() {
         const targetState = currentPowerState === 1 ? 0 : 1;
         const btn = document.getElementById('btn-power');
@@ -249,29 +248,22 @@
         try {
             if (targetState === 1) {
                 userWantsPowerOn = true;
-                // 1. Schalte den Power-Knoten sauber auf 1
                 await setFSAPI('netRemote.sys.power', '1');
                 await new Promise(r => setTimeout(r, 300));
-                
-                // 2. Sende sofort den PLAY-Befehl (Wert 1), um die Hardware real aufzuwecken
                 await setFSAPI('netRemote.play.control', '1');
                 console.log("Weck-Impuls (Play) erfolgreich hinterhergeschickt.");
             } else {
                 userWantsPowerOn = false;
-                // Erst Musik pausieren, dann sauber mit '0' ausschalten
                 await setFSAPI('netRemote.play.control', '2');
                 await new Promise(r => setTimeout(r, 200));
                 await setFSAPI('netRemote.sys.power', '0');
             }
 
-            // Dem Gerät Zeit zum Booten geben (1,2 Sekunden)
             await new Promise(r => setTimeout(r, 1200));
 
-            // Status frisch validieren
             let realPowerText = await fetchFSAPI('netRemote.sys.power');
             if (realPowerText !== null) {
                 let apiPowerState = parseInt(realPowerText);
-                
                 if (apiPowerState === 1 && !userWantsPowerOn) {
                     currentPowerState = 0;
                 } else {
@@ -300,11 +292,37 @@
         } catch (e) {}
     }
 
+    // KORRIGIERT: Fängt Skip-Befehle im Webinterface ab und rechnet den Index vorausschauend um
     async function sendControl(path, val) {
         try {
+            // Wenn wir uns in einer Playlist befinden (confirmedIndex existiert)
+            if (absoluteConfirmedIndex !== null && globalTotalTracks > 0) {
+                if (val === '3') { 
+                    // Wert '3' = Weiter (⏭) -> Erhöhe Index um 1 (solange wir nicht am Ende sind)
+                    if (absoluteConfirmedIndex < globalTotalTracks - 1) {
+                        absoluteConfirmedIndex = absoluteConfirmedIndex + 1;
+                        possibleCandidateIndices = [absoluteConfirmedIndex];
+                        console.log(`Skip-Forward gedrückt. Errechneter Ziel-Index: ${absoluteConfirmedIndex}`);
+                    }
+                } else if (val === '4') {
+                    // Wert '4' = Zurück (⏮) -> Verringere Index um 1 (solange wir nicht am Anfang sind)
+                    if (absoluteConfirmedIndex > 0) {
+                        absoluteConfirmedIndex = absoluteConfirmedIndex - 1;
+                        possibleCandidateIndices = [absoluteConfirmedIndex];
+                        console.log(`Skip-Backward gedrückt. Errechneter Ziel-Index: ${absoluteConfirmedIndex}`);
+                    }
+                }
+                
+                // Sofort die visuelle Anzeige aktualisieren, bevor in 4s das träge Radio antwortet
+                highlightCurrentTrackInList();
+            }
+
             await setFSAPI(path, val);
-            setTimeout(updateNowPlaying, 600);
-        } catch (e) {}
+            // Nach dem Skip dem Radio etwas Zeit geben, dann Daten abrufen
+            setTimeout(updateNowPlaying, 800);
+        } catch (e) {
+            console.error("Fehler bei Steuerung:", e);
+        }
     }
 </script>
 
@@ -483,15 +501,14 @@
     }
 </script>
 
-
-<!-- Block 3d: Multi-Highlighting im Schwebezustand (Teil 1) -->
+<!-- Block 3d: Elastische Positions-Verifizierung (Teil 1) -->
 <script>
     // Globale Variablen für deinen Spurverfolgungs-Algorithmus
     let absoluteConfirmedIndex = null; // Bestätigter, eindeutiger Song-Index (Ganzzahl)
     let possibleCandidateIndices = [];  // Array für unklare Indizes bei Doppelgängern
     let lastProcessedTitle = "";       // Speichert den Titel zur Erkennung eines Wechsels
 
-    // Visualisiert deine Logik mit Multi-Highlighting-Fallback
+    // Überprüft und visualisiert die Position auf Basis deines elastischen Abgleichs
     function highlightCurrentTrackInList() {
         const rows = document.querySelectorAll('.dlna-item');
         const trackNumEl = document.getElementById('info-tracknumber');
@@ -500,21 +517,48 @@
         if (!titleElement) return;
         const playingTitle = titleElement.innerText.trim().toLowerCase();
         
-        // Sicherheits-Abbruch, falls noch kein echter Songtitel vom Radio geliefert wurde
         if (playingTitle === "" || playingTitle.includes("keine daten") || playingTitle.includes("keine medien")) return;
 
         let targetIndices = [];
 
-        // Fall A: Die Position wurde durch den Songwechsel eindeutig mathematisch bestätigt
+        // Wenn wir eine mathematisch vermutete Position haben, validieren wir sie knallhart am echten Namen
         if (absoluteConfirmedIndex !== null) {
-            targetIndices.push(parseInt(absoluteConfirmedIndex));
+            const expectedRow = document.querySelector(`.dlna-item[data-trackindex="${absoluteConfirmedIndex}"]`);
+            if (expectedRow) {
+                const expectedSongName = expectedRow.getAttribute('data-songname');
+                
+                // KORREKTUR: Nur wenn der Name an der berechneten Stelle AUCH zum Live-Titel passt, nutzen wir ihn!
+                if (expectedSongName && (expectedSongName.includes(playingTitle) || playingTitle.includes(expectedSongName))) {
+                    targetIndices.push(absoluteConfirmedIndex);
+                } else {
+                    // Namenskonflikt! Der Index driftet ab. Wir loeschen den festen Index,
+                    // damit Block 3e gezwungen wird, die Position namentlich neu zu suchen.
+                    absoluteConfirmedIndex = null;
+                }
+            } else {
+                absoluteConfirmedIndex = null;
+            }
         } 
-        // Fall B: Es gibt aktuell mehrere Kandidaten im Schwebezustand -> Wir markieren ALLE passenden Zeilen
-        else if (possibleCandidateIndices.length > 0) {
-            possibleCandidateIndices.forEach(idx => targetIndices.push(parseInt(idx)));
+
+        // Fallback: Wenn der Index ungültig wurde oder unklar ist, markieren wir alle namentlich passenden Treffer
+        if (absoluteConfirmedIndex === null) {
+            rows.forEach(row => {
+                const songNameAttr = row.getAttribute('data-songname');
+                if (songNameAttr && (songNameAttr.includes(playingTitle) || playingTitle.includes(songNameAttr))) {
+                    const idx = parseInt(row.getAttribute('data-trackindex'));
+                    if (!targetIndices.includes(idx)) targetIndices.push(idx);
+                }
+            });
+            // Falls wir im Schwebezustand exakt ein Match finden, loggen wir es direkt wieder fest ein!
+            if (targetIndices.length === 1) {
+                absoluteConfirmedIndex = targetIndices[0];
+                possibleCandidateIndices = [absoluteConfirmedIndex];
+            } else {
+                possibleCandidateIndices = targetIndices;
+            }
         }
 
-        // UI-Aktualisierung: Schreibt die berechnete #/# Anzeige oben drüber
+        // UI-Aktualisierung der #/# Anzeige oben drüber
         if (absoluteConfirmedIndex !== null && globalTotalTracks > 0) {
             trackNumEl.innerText = `TRACK ${parseInt(absoluteConfirmedIndex) + 1}/${globalTotalTracks}`;
             trackNumEl.style.display = "block";
@@ -525,7 +569,7 @@
             trackNumEl.style.display = "none";
         }
 
-        // Visuelles Markieren im Browser
+        // Visuelles Umfärben der Zeilen im Browser-Kasten
         rows.forEach(row => {
             const trackIndexAttr = row.getAttribute('data-trackindex');
             if (trackIndexAttr !== null) {
@@ -549,7 +593,6 @@
             if (row.innerText.startsWith('🎵')) {
                 row.innerText = row.innerText.replace('🎵', '▶');
             }
-            // Scrollt nur automatisch, wenn es eine eindeutige Position ist (verhindert Scroll-Zittern)
             if (absoluteConfirmedIndex !== null) {
                 row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
@@ -567,7 +610,7 @@
     }
 </script>
 
-<!-- Block 3e: Info-Polling (Gegen Überschreiben bei Klicks geschützt) -->
+<!-- Block 3e: Das korrigierte Live-Polling (Teil 2) -->
 <script>
     async function updateNowPlaying() {
         const coverEl = document.getElementById('info-cover');
@@ -608,8 +651,26 @@
             } else { coverEl.style.display = "none"; }
             detailEl.style.display = detailEl.innerText ? "block" : "none";
 
-            // KORREKTUR: Wenn der Titel exakt dem entspricht, was der Nutzer eben geklickt hat,
-            // überspringen wir die Kettengenerierung, um den eingeloggten Index nicht zu zerstören!
+            // KORREKTUR: Wenn ein fester Index da ist, pruefen wir erst, ob der Name dort noch stimmt
+            if (absoluteConfirmedIndex !== null) {
+                const expectedRow = document.querySelector(`.dlna-item[data-trackindex="${absoluteConfirmedIndex}"]`);
+                if (expectedRow) {
+                    const expectedSongName = expectedRow.getAttribute('data-songname');
+                    
+                    // Stimmt der berechnete Platz noch mit dem echten Gesang ueberein?
+                    if (cleanLiveTitle !== "" && expectedSongName && (expectedSongName.includes(cleanLiveTitle.toLowerCase()) || cleanLiveTitle.toLowerCase().includes(expectedSongName))) {
+                        // Ja, alles in bester Ordnung!
+                        lastProcessedTitle = cleanLiveTitle;
+                        highlightCurrentTrackInList();
+                        return; 
+                    } else {
+                        // Konflikt! Das Radio singt was anderes. Wir loeschen den Index, damit unten neu gesucht wird
+                        absoluteConfirmedIndex = null;
+                    }
+                }
+            }
+
+            // Normales Polling und Spur-Verfolgung bei automatischen Liedwechseln
             if (cleanLiveTitle !== "" && cleanLiveTitle.toLowerCase() !== lastProcessedTitle.toLowerCase()) {
                 const currentTitleLower = cleanLiveTitle.toLowerCase();
                 const rows = document.querySelectorAll('.dlna-item');
@@ -635,11 +696,9 @@
                     if (validNextCandidates.length === 1) {
                         absoluteConfirmedIndex = parseInt(validNextCandidates);
                         possibleCandidateIndices = [absoluteConfirmedIndex];
-                        console.log(`Eindeutig eingeloggt auf Index: ${absoluteConfirmedIndex}`);
                     } else if (validNextCandidates.length > 1) {
                         absoluteConfirmedIndex = null;
                         possibleCandidateIndices = validNextCandidates;
-                        console.log("Mehrdeutige Kette im Schwebezustand.");
                     } else {
                         absoluteConfirmedIndex = (currentMatches.length === 1) ? parseInt(currentMatches) : null;
                         possibleCandidateIndices = currentMatches;
@@ -676,7 +735,6 @@
             if (liveVolRes !== null && livePosRes !== null) {
                 let liveVolume = parseInt(liveVolRes) || 0;
                 let currentPosMs = parseInt(livePosRes) || 0;
-                
                 currentVolume = liveVolume;
                 document.getElementById('txt-volume').innerText = currentVolume;
 
@@ -710,7 +768,6 @@
         }, 4000);
         setInterval(keepRadioAlive, 600000);
     };
-</script>
 </script>
 </body>
 </html>
