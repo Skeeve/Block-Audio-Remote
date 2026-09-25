@@ -164,7 +164,7 @@
     </div>
 </div>
 
-<!-- Block 3a: Konfiguration & Initialisierung (Bereinigte Standard-Fassung) -->
+<!-- Block 3a: Konfiguration & Initialisierung (Mit dynamischem FriendlyName) -->
 <script>
     const radioIP = "192.168.192.82"; 
     const pin = "1234";
@@ -197,8 +197,18 @@
         } catch (e) { return false; }
     }
 
+    // Status beim Start laden (Jetzt mit dynamischem FriendlyName Abruf)
     async function initStatus() {
         try {
+            // 1. Hole den im Radio konfigurierten Wunschnamen ab
+            let friendlyName = await fetchFSAPI('netRemote.sys.info.friendlyName');
+            if (friendlyName && friendlyName.trim() !== "") {
+                // Überschreibt das statische "Block Audio" in der H1-Überschrift deiner radio.html
+                const h1Element = document.querySelector('h1');
+                if (h1Element) h1Element.innerText = friendlyName.trim();
+            }
+
+            // 2. Normalen Power- und Lautstärke-Status wie gewohnt laden
             let power = await fetchFSAPI('netRemote.sys.power');
             currentPowerState = (power !== null) ? parseInt(power) : 0;
             updatePowerButtonUI();
@@ -209,7 +219,7 @@
             
             updateNowPlaying();
             loadDLNAList();
-        } catch (e) { console.error("Fehler beim Laden:", e); }
+        } catch (e) { console.error("Fehler beim Laden des Start-Status:", e); }
     }
 </script>
 
