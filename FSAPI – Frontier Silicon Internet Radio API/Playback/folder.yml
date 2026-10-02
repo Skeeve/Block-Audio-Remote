@@ -1,0 +1,11 @@
+info:
+  name: Playback
+  type: folder
+  seq: 7
+
+request:
+  auth: inherit
+
+docs:
+  content: netRemote.play.* nodes.
+  type: text/markdown

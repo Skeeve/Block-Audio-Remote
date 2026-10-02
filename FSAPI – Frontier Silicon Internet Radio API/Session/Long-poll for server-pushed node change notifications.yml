@@ -1,0 +1,62 @@
+info:
+  name: Long-poll for server-pushed node change notifications
+  type: http
+  seq: 3
+  tags:
+    - Session
+
+http:
+  method: GET
+  url: "{{baseUrl}}/fsapi/GET_NOTIFIES"
+  params:
+    - name: sid
+      value: ""
+      type: query
+      description: Active Session-ID obtained from CREATE_SESSION.
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+examples:
+  - name: 200 Response
+    description: One or more node-change notifications, or a timeout status.
+    request:
+      url: "{{baseUrl}}/fsapi/GET_NOTIFIES"
+      method: GET
+      params:
+        - name: sid
+          value: ""
+          type: query
+          description: Active Session-ID obtained from CREATE_SESSION.
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: text/xml
+      body:
+        type: xml
+        data: ""
+  - name: 404 Response
+    description: Not Found – `sid` is missing/invalid or path is invalid.
+    request:
+      url: "{{baseUrl}}/fsapi/GET_NOTIFIES"
+      method: GET
+      params:
+        - name: sid
+          value: ""
+          type: query
+          description: Active Session-ID obtained from CREATE_SESSION.
+    response:
+      status: 404
+      statusText: Not Found
+      body:
+        type: text
+        data: ""
+
+docs: Requires a valid, previously created `sid` (this is the one operation where a session is actually necessary, since there is no PIN-only equivalent). The connection is kept open by the device so it can push notifications about node value changes as they occur.

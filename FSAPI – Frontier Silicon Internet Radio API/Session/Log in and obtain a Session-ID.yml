@@ -1,0 +1,85 @@
+info:
+  name: Log in and obtain a Session-ID
+  type: http
+  seq: 1
+  tags:
+    - Session
+
+http:
+  method: GET
+  url: "{{baseUrl}}/fsapi/CREATE_SESSION?pin={{pin}}"
+  params:
+    - name: pin
+      value: "{{pin}}"
+      type: query
+      description: Device PIN used to authenticate the request.
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+examples:
+  - name: 200 Response
+    description: Request reached a valid path with a correct PIN. Check `<status>` for the actual outcome.
+    request:
+      url: "{{baseUrl}}/fsapi/CREATE_SESSION"
+      method: GET
+      params:
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: text/xml
+      body:
+        type: xml
+        data: ""
+  - name: 403 Response
+    description: Forbidden – PIN is missing or incorrect.
+    request:
+      url: "{{baseUrl}}/fsapi/CREATE_SESSION"
+      method: GET
+      params:
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+    response:
+      status: 403
+      statusText: Forbidden
+      headers:
+        - name: Content-Type
+          value: text/xml
+      body:
+        type: xml
+        data: |-
+          <?xml version="1.0" encoding="UTF-8"?>
+          <root>
+            <status>FS_OK</status>
+          </root>
+  - name: 404 Response
+    description: Not Found – invalid path.
+    request:
+      url: "{{baseUrl}}/fsapi/CREATE_SESSION"
+      method: GET
+      params:
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+    response:
+      status: 404
+      statusText: Not Found
+      body:
+        type: text
+        data: ""
+
+docs: Authenticates with the device PIN and returns a new `sessionId` (`sid`). Creating a session invalidates any session previously issued by this or another client, since the device supports only one active session at a time. Not required for any of the node requests below, which authenticate with `pin` directly.

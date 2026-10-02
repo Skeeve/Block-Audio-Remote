@@ -1,0 +1,114 @@
+info:
+  name: Write the value of an arbitrary node
+  type: http
+  seq: 2
+  tags:
+    - Generic Node Access
+
+http:
+  method: GET
+  url: "{{baseUrl}}/fsapi/SET/:node"
+  params:
+    - name: node
+      value: ""
+      type: path
+      description: Dotted FSAPI node path identifying the value to read/write, e.g. `netRemote.sys.info.friendlyName`.
+    - name: pin
+      value: "{{pin}}"
+      type: query
+      description: Device PIN used to authenticate the request.
+    - name: value
+      value: ""
+      type: query
+      description: New value to assign to the node.
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+examples:
+  - name: 200 Response
+    description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED, ...).
+    request:
+      url: "{{baseUrl}}/fsapi/SET/:node"
+      method: GET
+      params:
+        - name: node
+          value: ""
+          type: path
+          description: Dotted FSAPI node path identifying the value to read/write, e.g. `netRemote.sys.info.friendlyName`.
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: value
+          value: ""
+          type: query
+          description: New value to assign to the node.
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: text/xml
+      body:
+        type: xml
+        data: |-
+          <?xml version="1.0" encoding="UTF-8"?>
+          <root>
+            <status>FS_OK</status>
+          </root>
+  - name: 403 Response
+    description: Forbidden – PIN missing or incorrect.
+    request:
+      url: "{{baseUrl}}/fsapi/SET/:node"
+      method: GET
+      params:
+        - name: node
+          value: ""
+          type: path
+          description: Dotted FSAPI node path identifying the value to read/write, e.g. `netRemote.sys.info.friendlyName`.
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: value
+          value: ""
+          type: query
+          description: New value to assign to the node.
+    response:
+      status: 403
+      statusText: Forbidden
+      body:
+        type: text
+        data: ""
+  - name: 404 Response
+    description: Not Found – unknown node or invalid path.
+    request:
+      url: "{{baseUrl}}/fsapi/SET/:node"
+      method: GET
+      params:
+        - name: node
+          value: ""
+          type: path
+          description: Dotted FSAPI node path identifying the value to read/write, e.g. `netRemote.sys.info.friendlyName`.
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: value
+          value: ""
+          type: query
+          description: New value to assign to the node.
+    response:
+      status: 404
+      statusText: Not Found
+      body:
+        type: text
+        data: ""
+
+docs: Generic fallback for any node not covered by the category-specific requests below.

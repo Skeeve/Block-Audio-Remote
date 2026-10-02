@@ -1,0 +1,98 @@
+info:
+  name: Set netRemote.multiroom.group.removeClient
+  type: http
+  seq: 11
+  tags:
+    - Multiroom
+
+http:
+  method: GET
+  url: "{{baseUrl}}/fsapi/SET/netRemote.multiroom.group.removeClient?pin={{pin}}"
+  params:
+    - name: pin
+      value: "{{pin}}"
+      type: query
+      description: Device PIN used to authenticate the request.
+    - name: value
+      value: ""
+      type: query
+      description: New value to assign (unknown).
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+examples:
+  - name: 200 Response
+    description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED, ...).
+    request:
+      url: "{{baseUrl}}/fsapi/SET/netRemote.multiroom.group.removeClient"
+      method: GET
+      params:
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: value
+          value: ""
+          type: query
+          description: New value to assign (unknown).
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: text/xml
+      body:
+        type: xml
+        data: |-
+          <?xml version="1.0" encoding="UTF-8"?>
+          <root>
+            <status>FS_OK</status>
+          </root>
+  - name: 403 Response
+    description: Forbidden – PIN missing or incorrect.
+    request:
+      url: "{{baseUrl}}/fsapi/SET/netRemote.multiroom.group.removeClient"
+      method: GET
+      params:
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: value
+          value: ""
+          type: query
+          description: New value to assign (unknown).
+    response:
+      status: 403
+      statusText: Forbidden
+      body:
+        type: text
+        data: ""
+  - name: 404 Response
+    description: Not Found – unknown node or invalid path.
+    request:
+      url: "{{baseUrl}}/fsapi/SET/netRemote.multiroom.group.removeClient"
+      method: GET
+      params:
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: value
+          value: ""
+          type: query
+          description: New value to assign (unknown).
+    response:
+      status: 404
+      statusText: Not Found
+      body:
+        type: text
+        data: ""
+
+docs: Removes a device from the multiroom group.

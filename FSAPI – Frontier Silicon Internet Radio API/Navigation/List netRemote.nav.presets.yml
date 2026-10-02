@@ -1,0 +1,110 @@
+info:
+  name: List netRemote.nav.presets
+  type: http
+  seq: 14
+  tags:
+    - Navigation
+
+http:
+  method: GET
+  url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/netRemote.nav.presets/:index?pin={{pin}}&maxItems=1"
+  params:
+    - name: pin
+      value: "{{pin}}"
+      type: query
+      description: Device PIN used to authenticate the request.
+    - name: maxItems
+      value: "1"
+      type: query
+      description: Maximum number of list entries to return in this page.
+    - name: index
+      value: "0"
+      type: path
+      description: Zero-based index to continue listing after (-1 to start from the beginning).
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+examples:
+  - name: 200 Response
+    description: A page of list entries.
+    request:
+      url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/netRemote.nav.presets/:index"
+      method: GET
+      params:
+        - name: index
+          value: ""
+          type: path
+          description: Zero-based index to continue listing after (-1 to start from the beginning).
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: maxItems
+          value: "1"
+          type: query
+          description: Maximum number of list entries to return in this page.
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: text/xml
+      body:
+        type: xml
+        data: ""
+  - name: 403 Response
+    description: Forbidden – PIN missing or incorrect.
+    request:
+      url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/netRemote.nav.presets/:index"
+      method: GET
+      params:
+        - name: index
+          value: ""
+          type: path
+          description: Zero-based index to continue listing after (-1 to start from the beginning).
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: maxItems
+          value: "1"
+          type: query
+          description: Maximum number of list entries to return in this page.
+    response:
+      status: 403
+      statusText: Forbidden
+      body:
+        type: text
+        data: ""
+  - name: 404 Response
+    description: Not Found – unknown node or invalid path.
+    request:
+      url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/netRemote.nav.presets/:index"
+      method: GET
+      params:
+        - name: index
+          value: ""
+          type: path
+          description: Zero-based index to continue listing after (-1 to start from the beginning).
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: maxItems
+          value: "1"
+          type: query
+          description: Maximum number of list entries to return in this page.
+    response:
+      status: 404
+      statusText: Not Found
+      body:
+        type: text
+        data: ""
+
+docs: Stored favorite radio stations, retrieved via pagination.

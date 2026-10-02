@@ -1,0 +1,4909 @@
+openapi: 3.0.3
+info:
+  title: FSAPI – Frontier Silicon Internet Radio API
+  description: 'OpenAPI description of the Frontier Silicon FSAPI, covering session handling (CREATE_SESSION,
+    DELETE_SESSION, GET_NOTIFIES) and the full node reference (Navigation, Playback, System, Platform,
+    Misc/Debug, Test, Spotify, AirPlay, Multiroom), as documented at https://ex-frontier.hexdocs.pm/fsapi.html.
+
+
+    Authentication: every request accepts the device PIN as the `pin` query parameter. A session (`sid`,
+    obtained once from CREATE_SESSION) is an alternative to sending the PIN on every call, but is optional
+    — all node operations below are modeled using `pin` directly for simplicity, since a device only keeps
+    one session active at a time anyway and re-sending the PIN avoids session-invalidation issues entirely.
+
+
+    Node coverage note: many nodes (especially under System, Spotify, AirPlay, Test, Misc and Platform)
+    are marked as undocumented/TODO in the upstream reference itself — those are still included here (as
+    GET operations) but flagged in their description so you know the access mode is a best guess, not
+    confirmed. Nodes documented as list-type are exposed via LIST_GET_NEXT instead of GET. Indexed multiroom
+    client nodes (originally suffixed `X` in the docs) are modeled with a path parameter instead.'
+  version: 2.0.0
+  contact:
+    name: FSAPI reference
+    url: https://ex-frontier.hexdocs.pm/fsapi.html
+externalDocs:
+  description: Original FSAPI documentation (fsapi Elixir library)
+  url: https://ex-frontier.hexdocs.pm/fsapi.html
+servers:
+- url: http://{deviceHost}
+  description: The internet radio / FSAPI device on the local network.
+  variables:
+    deviceHost:
+      default: 192.168.1.100
+      description: IP address or hostname of the FSAPI device.
+tags:
+- name: Session
+  description: Create/destroy a session and watch for push notifications.
+- name: Generic Node Access
+  description: Untyped GET/SET/LIST_GET_NEXT for any node path, including ones not covered below.
+- name: Navigation
+  description: netRemote.nav.* nodes.
+- name: Playback
+  description: netRemote.play.* nodes.
+- name: System
+  description: netRemote.sys.* nodes.
+- name: Platform
+  description: netRemote.platform.* nodes.
+- name: Misc / Debug
+  description: netRemote.misc.* nodes.
+- name: Test
+  description: netRemote.test.* nodes.
+- name: Spotify
+  description: Only available on devices with Spotify support. netRemote.spotify.* nodes.
+- name: AirPlay
+  description: Only available on devices with AirPlay support. netRemote.airplay.* nodes.
+- name: Multiroom
+  description: netRemote.multiroom.* nodes.
+paths:
+  /fsapi/CREATE_SESSION:
+    get:
+      operationId: createSession
+      tags:
+      - Session
+      summary: Log in and obtain a Session-ID
+      description: Authenticates with the device PIN and returns a new `sessionId` (`sid`). Creating a
+        session invalidates any session previously issued by this or another client, since the device
+        supports only one active session at a time. Not required for any of the node requests below, which
+        authenticate with `pin` directly.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Request reached a valid path with a correct PIN. Check `<status>` for the actual
+            outcome.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/CreateSessionResponse'
+        '403':
+          description: Forbidden – PIN is missing or incorrect.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '404':
+          description: Not Found – invalid path.
+  /fsapi/DELETE_SESSION:
+    get:
+      operationId: deleteSession
+      tags:
+      - Session
+      summary: Log out and invalidate a Session-ID
+      description: Destroys the given session so its `sid` can no longer be used.
+      parameters:
+      - $ref: '#/components/parameters/sid'
+      responses:
+        '200':
+          description: Session deleted (or status explains why not).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '404':
+          description: Not Found – `sid` is unknown/invalid or path is invalid.
+  /fsapi/GET_NOTIFIES:
+    get:
+      operationId: getNotifies
+      tags:
+      - Session
+      summary: Long-poll for server-pushed node change notifications
+      description: Requires a valid, previously created `sid` (this is the one operation where a session
+        is actually necessary, since there is no PIN-only equivalent). The connection is kept open by
+        the device so it can push notifications about node value changes as they occur.
+      parameters:
+      - $ref: '#/components/parameters/sid'
+      responses:
+        '200':
+          description: One or more node-change notifications, or a timeout status.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/NotifyResponse'
+        '404':
+          description: Not Found – `sid` is missing/invalid or path is invalid.
+  /fsapi/GET/{node}:
+    get:
+      operationId: getNodeGeneric
+      tags:
+      - Generic Node Access
+      summary: Read the value of an arbitrary node
+      description: Generic fallback for any node not covered by the category-specific requests below.
+      parameters:
+      - $ref: '#/components/parameters/node'
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/{node}:
+    get:
+      operationId: setNodeGeneric
+      tags:
+      - Generic Node Access
+      summary: Write the value of an arbitrary node
+      description: Generic fallback for any node not covered by the category-specific requests below.
+      parameters:
+      - $ref: '#/components/parameters/node'
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign to the node.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/{node}/{index}:
+    get:
+      operationId: listGetNextGeneric
+      tags:
+      - Generic Node Access
+      summary: Fetch the next page of an arbitrary list-type node
+      description: Generic fallback for any list node not covered by the category-specific requests below.
+      parameters:
+      - $ref: '#/components/parameters/node'
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.action.dabPrune:
+    get:
+      operationId: get_netRemote_nav_action_dabPrune
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.action.dabPrune
+      description: Purpose not documented upstream. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.action.dabScan:
+    get:
+      operationId: get_netRemote_nav_action_dabScan
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.action.dabScan
+      description: Initiates a scan for digital audio broadcast (DAB) channels.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.nav.action.navigate:
+    get:
+      operationId: set_netRemote_nav_action_navigate
+      tags:
+      - Navigation
+      summary: Set netRemote.nav.action.navigate
+      description: Selects the current menu entry or returns to the parent level.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.nav.action.selectItem:
+    get:
+      operationId: set_netRemote_nav_action_selectItem
+      tags:
+      - Navigation
+      summary: Set netRemote.nav.action.selectItem
+      description: Chooses a menu item from file-type entries.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.action.selectPreset:
+    get:
+      operationId: get_netRemote_nav_action_selectPreset
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.action.selectPreset
+      description: Picks a saved favorite radio station.
+      parameters:
+      - &id001
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.nav.action.selectPreset:
+    get:
+      operationId: set_netRemote_nav_action_selectPreset
+      tags:
+      - Navigation
+      summary: Set netRemote.nav.action.selectPreset
+      description: Picks a saved favorite radio station.
+      parameters:
+      - *id001
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.browseMode:
+    get:
+      operationId: get_netRemote_nav_browseMode
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.browseMode
+      description: Purpose not documented upstream. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.caps:
+    get:
+      operationId: get_netRemote_nav_caps
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.caps
+      description: Capability flags for the navigation feature.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.dabScanUpdate:
+    get:
+      operationId: get_netRemote_nav_dabScanUpdate
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.dabScanUpdate
+      description: Purpose not documented upstream. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.depth:
+    get:
+      operationId: get_netRemote_nav_depth
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.depth
+      description: Current menu hierarchy level.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.errorStr:
+    get:
+      operationId: get_netRemote_nav_errorStr
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.errorStr
+      description: Purpose not documented upstream. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.nav.list/{index}:
+    get:
+      operationId: list_netRemote_nav_list
+      tags:
+      - Navigation
+      summary: List netRemote.nav.list
+      description: Menu structure/entries, retrieved via pagination.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.numItems:
+    get:
+      operationId: get_netRemote_nav_numItems
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.numItems
+      description: Total number of entries in the current menu.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.nav.presets/{index}:
+    get:
+      operationId: list_netRemote_nav_presets
+      tags:
+      - Navigation
+      summary: List netRemote.nav.presets
+      description: Stored favorite radio stations, retrieved via pagination.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.nav.searchTerm:
+    get:
+      operationId: set_netRemote_nav_searchTerm
+      tags:
+      - Navigation
+      summary: Set netRemote.nav.searchTerm
+      description: Filters the current menu based on a search term.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (c8_array).
+        schema: &id025
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.state:
+    get:
+      operationId: get_netRemote_nav_state
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.state
+      description: Enables or disables menu navigation.
+      parameters:
+      - &id002
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.nav.state:
+    get:
+      operationId: set_netRemote_nav_state
+      tags:
+      - Navigation
+      summary: Set netRemote.nav.state
+      description: Enables or disables menu navigation.
+      parameters:
+      - *id002
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: &id004
+          type: integer
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.nav.status:
+    get:
+      operationId: get_netRemote_nav_status
+      tags:
+      - Navigation
+      summary: Get netRemote.nav.status
+      description: Whether menu preparation is complete.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.play.addPreset:
+    get:
+      operationId: set_netRemote_play_addPreset
+      tags:
+      - Playback
+      summary: Set netRemote.play.addPreset
+      description: Appends the currently playing station to the favorites list.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.addPresetStatus:
+    get:
+      operationId: get_netRemote_play_addPresetStatus
+      tags:
+      - Playback
+      summary: Get netRemote.play.addPresetStatus
+      description: Status of adding the current station to favorites.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.caps:
+    get:
+      operationId: get_netRemote_play_caps
+      tags:
+      - Playback
+      summary: Get netRemote.play.caps
+      description: Capability flags for the current playback mode.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.control:
+    get:
+      operationId: get_netRemote_play_control
+      tags:
+      - Playback
+      summary: Get netRemote.play.control
+      description: Controls playback state (play, pause, next, previous).
+      parameters:
+      - &id003
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.play.control:
+    get:
+      operationId: set_netRemote_play_control
+      tags:
+      - Playback
+      summary: Set netRemote.play.control
+      description: Controls playback state (play, pause, next, previous).
+      parameters:
+      - *id003
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.errorStr:
+    get:
+      operationId: get_netRemote_play_errorStr
+      tags:
+      - Playback
+      summary: Get netRemote.play.errorStr
+      description: Error message from the playback system, if any.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.feedback:
+    get:
+      operationId: get_netRemote_play_feedback
+      tags:
+      - Playback
+      summary: Get netRemote.play.feedback
+      description: Purpose not documented upstream. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.frequency:
+    get:
+      operationId: get_netRemote_play_frequency
+      tags:
+      - Playback
+      summary: Get netRemote.play.frequency
+      description: FM tuner frequency in Hz.
+      parameters:
+      - &id005
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.play.frequency:
+    get:
+      operationId: set_netRemote_play_frequency
+      tags:
+      - Playback
+      summary: Set netRemote.play.frequency
+      description: FM tuner frequency in Hz.
+      parameters:
+      - *id005
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u32).
+        schema: &id007
+          type: integer
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.info.album:
+    get:
+      operationId: get_netRemote_play_info_album
+      tags:
+      - Playback
+      summary: Get netRemote.play.info.album
+      description: Album title of the current track.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.info.artist:
+    get:
+      operationId: get_netRemote_play_info_artist
+      tags:
+      - Playback
+      summary: Get netRemote.play.info.artist
+      description: Performer/artist of the current track.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.info.duration:
+    get:
+      operationId: get_netRemote_play_info_duration
+      tags:
+      - Playback
+      summary: Get netRemote.play.info.duration
+      description: Total duration of the current track, in milliseconds.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.info.graphicUri:
+    get:
+      operationId: get_netRemote_play_info_graphicUri
+      tags:
+      - Playback
+      summary: Get netRemote.play.info.graphicUri
+      description: URL of the artwork for the current content.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.info.name:
+    get:
+      operationId: get_netRemote_play_info_name
+      tags:
+      - Playback
+      summary: Get netRemote.play.info.name
+      description: First display line for the current playback item.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.info.text:
+    get:
+      operationId: get_netRemote_play_info_text
+      tags:
+      - Playback
+      summary: Get netRemote.play.info.text
+      description: Second display line for the current playback item.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.position:
+    get:
+      operationId: get_netRemote_play_position
+      tags:
+      - Playback
+      summary: Get netRemote.play.position
+      description: Playback position in milliseconds.
+      parameters:
+      - &id006
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.play.position:
+    get:
+      operationId: set_netRemote_play_position
+      tags:
+      - Playback
+      summary: Set netRemote.play.position
+      description: Playback position in milliseconds.
+      parameters:
+      - *id006
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u32).
+        schema: *id007
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.rate:
+    get:
+      operationId: get_netRemote_play_rate
+      tags:
+      - Playback
+      summary: Get netRemote.play.rate
+      description: Playback speed multiplier.
+      parameters:
+      - &id008
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.play.rate:
+    get:
+      operationId: set_netRemote_play_rate
+      tags:
+      - Playback
+      summary: Set netRemote.play.rate
+      description: Playback speed multiplier.
+      parameters:
+      - *id008
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (s8).
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.repeat:
+    get:
+      operationId: get_netRemote_play_repeat
+      tags:
+      - Playback
+      summary: Get netRemote.play.repeat
+      description: Enables or disables repeating the current track.
+      parameters:
+      - &id009
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.play.repeat:
+    get:
+      operationId: set_netRemote_play_repeat
+      tags:
+      - Playback
+      summary: Set netRemote.play.repeat
+      description: Enables or disables repeating the current track.
+      parameters:
+      - *id009
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.scrobble:
+    get:
+      operationId: get_netRemote_play_scrobble
+      tags:
+      - Playback
+      summary: Get netRemote.play.scrobble
+      description: Whether scrobble submission is active.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.serviceIds.dabEnsembleId:
+    get:
+      operationId: get_netRemote_play_serviceIds_dabEnsembleId
+      tags:
+      - Playback
+      summary: Get netRemote.play.serviceIds.dabEnsembleId
+      description: DAB ensemble identifier (decimal).
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.serviceIds.dabScids:
+    get:
+      operationId: get_netRemote_play_serviceIds_dabScids
+      tags:
+      - Playback
+      summary: Get netRemote.play.serviceIds.dabScids
+      description: DAB service component identifier.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.serviceIds.dabServiceId:
+    get:
+      operationId: get_netRemote_play_serviceIds_dabServiceId
+      tags:
+      - Playback
+      summary: Get netRemote.play.serviceIds.dabServiceId
+      description: DAB service identifier (decimal).
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.serviceIds.ecc:
+    get:
+      operationId: get_netRemote_play_serviceIds_ecc
+      tags:
+      - Playback
+      summary: Get netRemote.play.serviceIds.ecc
+      description: Extended country code per ETSI TS 101 756.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.serviceIds.fmRdsPi:
+    get:
+      operationId: get_netRemote_play_serviceIds_fmRdsPi
+      tags:
+      - Playback
+      summary: Get netRemote.play.serviceIds.fmRdsPi
+      description: RDS programme identification code for FM.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.shuffle:
+    get:
+      operationId: get_netRemote_play_shuffle
+      tags:
+      - Playback
+      summary: Get netRemote.play.shuffle
+      description: Enables or disables random track order.
+      parameters:
+      - &id010
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.play.shuffle:
+    get:
+      operationId: set_netRemote_play_shuffle
+      tags:
+      - Playback
+      summary: Set netRemote.play.shuffle
+      description: Enables or disables random track order.
+      parameters:
+      - *id010
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.shuffleStatus:
+    get:
+      operationId: get_netRemote_play_shuffleStatus
+      tags:
+      - Playback
+      summary: Get netRemote.play.shuffleStatus
+      description: Shuffle status (newer API version).
+      parameters:
+      - &id011
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.play.shuffleStatus:
+    get:
+      operationId: set_netRemote_play_shuffleStatus
+      tags:
+      - Playback
+      summary: Set netRemote.play.shuffleStatus
+      description: Shuffle status (newer API version).
+      parameters:
+      - *id011
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.signalStrength:
+    get:
+      operationId: get_netRemote_play_signalStrength
+      tags:
+      - Playback
+      summary: Get netRemote.play.signalStrength
+      description: Reception quality of the current source.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.play.status:
+    get:
+      operationId: get_netRemote_play_status
+      tags:
+      - Playback
+      summary: Get netRemote.play.status
+      description: Current playback state (buffering/playing/paused).
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.alarm.duration:
+    get:
+      operationId: get_netRemote_sys_alarm_duration
+      tags:
+      - System
+      summary: Get netRemote.sys.alarm.duration
+      description: Alarm duration setting. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.alarm.current:
+    get:
+      operationId: get_netRemote_sys_alarm_current
+      tags:
+      - System
+      summary: Get netRemote.sys.alarm.current
+      description: Currently active alarm. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.alarm.config:
+    get:
+      operationId: get_netRemote_sys_alarm_config
+      tags:
+      - System
+      summary: Get netRemote.sys.alarm.config
+      description: Alarm configuration. (Not documented upstream — access mode assumed as read-only; verify
+        against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.alarm.configChanged:
+    get:
+      operationId: get_netRemote_sys_alarm_configChanged
+      tags:
+      - System
+      summary: Get netRemote.sys.alarm.configChanged
+      description: Indicates a change in alarm configuration. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.alarm.status:
+    get:
+      operationId: get_netRemote_sys_alarm_status
+      tags:
+      - System
+      summary: Get netRemote.sys.alarm.status
+      description: Alarm operational status. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.alarm.snooze:
+    get:
+      operationId: get_netRemote_sys_alarm_snooze
+      tags:
+      - System
+      summary: Get netRemote.sys.alarm.snooze
+      description: Snoozes the active alarm. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.alarm.snoozing:
+    get:
+      operationId: get_netRemote_sys_alarm_snoozing
+      tags:
+      - System
+      summary: Get netRemote.sys.alarm.snoozing
+      description: Whether an alarm is currently snoozing. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.eqCustom.param:
+    get:
+      operationId: get_netRemote_sys_audio_eqCustom_param
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.eqCustom.param
+      description: Custom equalizer parameter. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.eqCustom.param0:
+    get:
+      operationId: get_netRemote_sys_audio_eqCustom_param0
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.eqCustom.param0
+      description: Bass adjustment for the custom EQ (range -7 to 7).
+      parameters:
+      - &id012
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.audio.eqCustom.param0:
+    get:
+      operationId: set_netRemote_sys_audio_eqCustom_param0
+      tags:
+      - System
+      summary: Set netRemote.sys.audio.eqCustom.param0
+      description: Bass adjustment for the custom EQ (range -7 to 7).
+      parameters:
+      - *id012
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (s16).
+        schema: &id014
+          type: integer
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.eqCustom.param1:
+    get:
+      operationId: get_netRemote_sys_audio_eqCustom_param1
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.eqCustom.param1
+      description: Treble adjustment for the custom EQ (range -7 to 7).
+      parameters:
+      - &id013
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.audio.eqCustom.param1:
+    get:
+      operationId: set_netRemote_sys_audio_eqCustom_param1
+      tags:
+      - System
+      summary: Set netRemote.sys.audio.eqCustom.param1
+      description: Treble adjustment for the custom EQ (range -7 to 7).
+      parameters:
+      - *id013
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (s16).
+        schema: *id014
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.eqCustom.param2:
+    get:
+      operationId: get_netRemote_sys_audio_eqCustom_param2
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.eqCustom.param2
+      description: Custom EQ parameter 2. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.eqCustom.param3:
+    get:
+      operationId: get_netRemote_sys_audio_eqCustom_param3
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.eqCustom.param3
+      description: Custom EQ parameter 3. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.eqCustom.param4:
+    get:
+      operationId: get_netRemote_sys_audio_eqCustom_param4
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.eqCustom.param4
+      description: Custom EQ parameter 4. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.eqLoudness:
+    get:
+      operationId: get_netRemote_sys_audio_eqLoudness
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.eqLoudness
+      description: Loudness enhancement toggle for the active custom EQ.
+      parameters:
+      - &id015
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.audio.eqLoudness:
+    get:
+      operationId: set_netRemote_sys_audio_eqLoudness
+      tags:
+      - System
+      summary: Set netRemote.sys.audio.eqLoudness
+      description: Loudness enhancement toggle for the active custom EQ.
+      parameters:
+      - *id015
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.eqPreset:
+    get:
+      operationId: get_netRemote_sys_audio_eqPreset
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.eqPreset
+      description: Selected equalizer preset identifier.
+      parameters:
+      - &id016
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.audio.eqPreset:
+    get:
+      operationId: set_netRemote_sys_audio_eqPreset
+      tags:
+      - System
+      summary: Set netRemote.sys.audio.eqPreset
+      description: Selected equalizer preset identifier.
+      parameters:
+      - *id016
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.extStaticDelay:
+    get:
+      operationId: get_netRemote_sys_audio_extStaticDelay
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.extStaticDelay
+      description: External static delay setting. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.mute:
+    get:
+      operationId: get_netRemote_sys_audio_mute
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.mute
+      description: Mute toggle for device audio output.
+      parameters:
+      - &id017
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.audio.mute:
+    get:
+      operationId: set_netRemote_sys_audio_mute
+      tags:
+      - System
+      summary: Set netRemote.sys.audio.mute
+      description: Mute toggle for device audio output.
+      parameters:
+      - *id017
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.audio.volume:
+    get:
+      operationId: get_netRemote_sys_audio_volume
+      tags:
+      - System
+      summary: Get netRemote.sys.audio.volume
+      description: Device volume level (valid range 1-20).
+      parameters:
+      - &id018
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.audio.volume:
+    get:
+      operationId: set_netRemote_sys_audio_volume
+      tags:
+      - System
+      summary: Set netRemote.sys.audio.volume
+      description: Device volume level (valid range 1-20).
+      parameters:
+      - *id018
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.sys.caps.clockSourceList/{index}:
+    get:
+      operationId: list_netRemote_sys_caps_clockSourceList
+      tags:
+      - System
+      summary: List netRemote.sys.caps.clockSourceList
+      description: Available time sources.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.sys.caps.dabFreqList/{index}:
+    get:
+      operationId: list_netRemote_sys_caps_dabFreqList
+      tags:
+      - System
+      summary: List netRemote.sys.caps.dabFreqList
+      description: Available DAB frequency bands.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.sys.caps.eqBands/{index}:
+    get:
+      operationId: list_netRemote_sys_caps_eqBands
+      tags:
+      - System
+      summary: List netRemote.sys.caps.eqBands
+      description: Equalizer band configurations and ranges.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.sys.caps.eqPresets/{index}:
+    get:
+      operationId: list_netRemote_sys_caps_eqPresets
+      tags:
+      - System
+      summary: List netRemote.sys.caps.eqPresets
+      description: Available equalizer presets.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.caps.extStaticDelayMax:
+    get:
+      operationId: get_netRemote_sys_caps_extStaticDelayMax
+      tags:
+      - System
+      summary: Get netRemote.sys.caps.extStaticDelayMax
+      description: Maximum external static delay value. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.caps.fmFreqRange.lower:
+    get:
+      operationId: get_netRemote_sys_caps_fmFreqRange_lower
+      tags:
+      - System
+      summary: Get netRemote.sys.caps.fmFreqRange.lower
+      description: Minimum supported FM frequency.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.caps.fmFreqRange.stepSize:
+    get:
+      operationId: get_netRemote_sys_caps_fmFreqRange_stepSize
+      tags:
+      - System
+      summary: Get netRemote.sys.caps.fmFreqRange.stepSize
+      description: FM frequency step size.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.caps.fmFreqRange.upper:
+    get:
+      operationId: get_netRemote_sys_caps_fmFreqRange_upper
+      tags:
+      - System
+      summary: Get netRemote.sys.caps.fmFreqRange.upper
+      description: Maximum supported FM frequency.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.sys.caps.utcSettingsList/{index}:
+    get:
+      operationId: list_netRemote_sys_caps_utcSettingsList
+      tags:
+      - System
+      summary: List netRemote.sys.caps.utcSettingsList
+      description: Available UTC offset options.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.caps.validLang:
+    get:
+      operationId: get_netRemote_sys_caps_validLang
+      tags:
+      - System
+      summary: Get netRemote.sys.caps.validLang
+      description: Valid language options. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.sys.caps.validModes/{index}:
+    get:
+      operationId: list_netRemote_sys_caps_validModes
+      tags:
+      - System
+      summary: List netRemote.sys.caps.validModes
+      description: Available operation modes.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.caps.volumeSteps:
+    get:
+      operationId: get_netRemote_sys_caps_volumeSteps
+      tags:
+      - System
+      summary: Get netRemote.sys.caps.volumeSteps
+      description: Maximum volume level supported by the device.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.clock.dateFormat:
+    get:
+      operationId: get_netRemote_sys_clock_dateFormat
+      tags:
+      - System
+      summary: Get netRemote.sys.clock.dateFormat
+      description: Date display format setting. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.clock.dst:
+    get:
+      operationId: get_netRemote_sys_clock_dst
+      tags:
+      - System
+      summary: Get netRemote.sys.clock.dst
+      description: Daylight saving time toggle.
+      parameters:
+      - &id019
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.clock.dst:
+    get:
+      operationId: set_netRemote_sys_clock_dst
+      tags:
+      - System
+      summary: Set netRemote.sys.clock.dst
+      description: Daylight saving time toggle.
+      parameters:
+      - *id019
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.clock.localDate:
+    get:
+      operationId: get_netRemote_sys_clock_localDate
+      tags:
+      - System
+      summary: Get netRemote.sys.clock.localDate
+      description: Current local date (YYYYMMDD).
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.clock.localTime:
+    get:
+      operationId: get_netRemote_sys_clock_localTime
+      tags:
+      - System
+      summary: Get netRemote.sys.clock.localTime
+      description: Current local time (HHMMSS).
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.clock.mode:
+    get:
+      operationId: get_netRemote_sys_clock_mode
+      tags:
+      - System
+      summary: Get netRemote.sys.clock.mode
+      description: 'Clock display mode: 0 = 12-hour, 1 = 24-hour.'
+      parameters:
+      - &id020
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.clock.mode:
+    get:
+      operationId: set_netRemote_sys_clock_mode
+      tags:
+      - System
+      summary: Set netRemote.sys.clock.mode
+      description: 'Clock display mode: 0 = 12-hour, 1 = 24-hour.'
+      parameters:
+      - *id020
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.clock.source:
+    get:
+      operationId: get_netRemote_sys_clock_source
+      tags:
+      - System
+      summary: Get netRemote.sys.clock.source
+      description: Time synchronization source selection.
+      parameters:
+      - &id021
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.clock.source:
+    get:
+      operationId: set_netRemote_sys_clock_source
+      tags:
+      - System
+      summary: Set netRemote.sys.clock.source
+      description: Time synchronization source selection.
+      parameters:
+      - *id021
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.clock.utcOffset:
+    get:
+      operationId: get_netRemote_sys_clock_utcOffset
+      tags:
+      - System
+      summary: Get netRemote.sys.clock.utcOffset
+      description: Offset of local time compared to UTC.
+      parameters:
+      - &id022
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.clock.utcOffset:
+    get:
+      operationId: set_netRemote_sys_clock_utcOffset
+      tags:
+      - System
+      summary: Set netRemote.sys.clock.utcOffset
+      description: Offset of local time compared to UTC.
+      parameters:
+      - *id022
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (s32).
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.cfg.irAutoPlayFlag:
+    get:
+      operationId: get_netRemote_sys_cfg_irAutoPlayFlag
+      tags:
+      - System
+      summary: Get netRemote.sys.cfg.irAutoPlayFlag
+      description: Internet radio auto-play behavior flag.
+      parameters:
+      - &id023
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.cfg.irAutoPlayFlag:
+    get:
+      operationId: set_netRemote_sys_cfg_irAutoPlayFlag
+      tags:
+      - System
+      summary: Set netRemote.sys.cfg.irAutoPlayFlag
+      description: Internet radio auto-play behavior flag.
+      parameters:
+      - *id023
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.factoryReset:
+    get:
+      operationId: get_netRemote_sys_factoryReset
+      tags:
+      - System
+      summary: Get netRemote.sys.factoryReset
+      description: Triggers a factory reset. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.info.activeSession:
+    get:
+      operationId: get_netRemote_sys_info_activeSession
+      tags:
+      - System
+      summary: Get netRemote.sys.info.activeSession
+      description: Currently active session identifier. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.info.dmruuid:
+    get:
+      operationId: get_netRemote_sys_info_dmruuid
+      tags:
+      - System
+      summary: Get netRemote.sys.info.dmruuid
+      description: DMR device UUID. (Not documented upstream — access mode assumed as read-only; verify
+        against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.info.friendlyName:
+    get:
+      operationId: get_netRemote_sys_info_friendlyName
+      tags:
+      - System
+      summary: Get netRemote.sys.info.friendlyName
+      description: Network-visible device name.
+      parameters:
+      - &id024
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.info.friendlyName:
+    get:
+      operationId: set_netRemote_sys_info_friendlyName
+      tags:
+      - System
+      summary: Set netRemote.sys.info.friendlyName
+      description: Network-visible device name.
+      parameters:
+      - *id024
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (c8_array).
+        schema: *id025
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.info.radioId:
+    get:
+      operationId: get_netRemote_sys_info_radioId
+      tags:
+      - System
+      summary: Get netRemote.sys.info.radioId
+      description: Unique device identifier string.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.info.radioPin:
+    get:
+      operationId: set_netRemote_sys_info_radioPin
+      tags:
+      - System
+      summary: Set netRemote.sys.info.radioPin
+      description: PIN credential used for API access control.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.info.version:
+    get:
+      operationId: get_netRemote_sys_info_version
+      tags:
+      - System
+      summary: Get netRemote.sys.info.version
+      description: Firmware version string.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.info.controllerName:
+    get:
+      operationId: get_netRemote_sys_info_controllerName
+      tags:
+      - System
+      summary: Get netRemote.sys.info.controllerName
+      description: Name of the remote control application in use.
+      parameters:
+      - &id026
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.info.controllerName:
+    get:
+      operationId: set_netRemote_sys_info_controllerName
+      tags:
+      - System
+      summary: Set netRemote.sys.info.controllerName
+      description: Name of the remote control application in use.
+      parameters:
+      - *id026
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (c8_array).
+        schema: *id025
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.isu.control:
+    get:
+      operationId: get_netRemote_sys_isu_control
+      tags:
+      - System
+      summary: Get netRemote.sys.isu.control
+      description: Software update control (2 = search for updates).
+      parameters:
+      - &id027
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.isu.control:
+    get:
+      operationId: set_netRemote_sys_isu_control
+      tags:
+      - System
+      summary: Set netRemote.sys.isu.control
+      description: Software update control (2 = search for updates).
+      parameters:
+      - *id027
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.isu.mandatory:
+    get:
+      operationId: get_netRemote_sys_isu_mandatory
+      tags:
+      - System
+      summary: Get netRemote.sys.isu.mandatory
+      description: Whether a mandatory update is pending. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.isu.softwareUpdateProgress:
+    get:
+      operationId: get_netRemote_sys_isu_softwareUpdateProgress
+      tags:
+      - System
+      summary: Get netRemote.sys.isu.softwareUpdateProgress
+      description: Progress of an ongoing update. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.isu.state:
+    get:
+      operationId: get_netRemote_sys_isu_state
+      tags:
+      - System
+      summary: Get netRemote.sys.isu.state
+      description: 'Update state: 0 = idle, 1 = searching, 2 = complete.'
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.isu.summary:
+    get:
+      operationId: get_netRemote_sys_isu_summary
+      tags:
+      - System
+      summary: Get netRemote.sys.isu.summary
+      description: Summary of an available software update. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.isu.version:
+    get:
+      operationId: get_netRemote_sys_isu_version
+      tags:
+      - System
+      summary: Get netRemote.sys.isu.version
+      description: Available software update version. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.lang:
+    get:
+      operationId: get_netRemote_sys_lang
+      tags:
+      - System
+      summary: Get netRemote.sys.lang
+      description: User interface language code.
+      parameters:
+      - &id028
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.lang:
+    get:
+      operationId: set_netRemote_sys_lang
+      tags:
+      - System
+      summary: Set netRemote.sys.lang
+      description: User interface language code.
+      parameters:
+      - *id028
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u32).
+        schema: *id007
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.mode:
+    get:
+      operationId: get_netRemote_sys_mode
+      tags:
+      - System
+      summary: Get netRemote.sys.mode
+      description: Current operation mode (IR, DAB, FM, Spotify, ...).
+      parameters:
+      - &id029
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.mode:
+    get:
+      operationId: set_netRemote_sys_mode
+      tags:
+      - System
+      summary: Set netRemote.sys.mode
+      description: Current operation mode (IR, DAB, FM, Spotify, ...).
+      parameters:
+      - *id029
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u32).
+        schema: *id007
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.commitChanges:
+    get:
+      operationId: get_netRemote_sys_net_commitChanges
+      tags:
+      - System
+      summary: Get netRemote.sys.net.commitChanges
+      description: Commits pending network configuration changes. (Not documented upstream — access mode
+        assumed as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.ipConfig.address:
+    get:
+      operationId: get_netRemote_sys_net_ipConfig_address
+      tags:
+      - System
+      summary: Get netRemote.sys.net.ipConfig.address
+      description: Current IP address.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.ipConfig.dhcp:
+    get:
+      operationId: get_netRemote_sys_net_ipConfig_dhcp
+      tags:
+      - System
+      summary: Get netRemote.sys.net.ipConfig.dhcp
+      description: Whether DHCP is enabled.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.ipConfig.dnsPrimary:
+    get:
+      operationId: get_netRemote_sys_net_ipConfig_dnsPrimary
+      tags:
+      - System
+      summary: Get netRemote.sys.net.ipConfig.dnsPrimary
+      description: Primary DNS server address.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.ipConfig.dnsSecondary:
+    get:
+      operationId: get_netRemote_sys_net_ipConfig_dnsSecondary
+      tags:
+      - System
+      summary: Get netRemote.sys.net.ipConfig.dnsSecondary
+      description: Secondary DNS server address.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.ipConfig.gateway:
+    get:
+      operationId: get_netRemote_sys_net_ipConfig_gateway
+      tags:
+      - System
+      summary: Get netRemote.sys.net.ipConfig.gateway
+      description: Default network gateway address.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.ipConfig.subnetMask:
+    get:
+      operationId: get_netRemote_sys_net_ipConfig_subnetMask
+      tags:
+      - System
+      summary: Get netRemote.sys.net.ipConfig.subnetMask
+      description: Network subnet mask.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.keepConnected:
+    get:
+      operationId: get_netRemote_sys_net_keepConnected
+      tags:
+      - System
+      summary: Get netRemote.sys.net.keepConnected
+      description: Keep the network connection alive during standby.
+      parameters:
+      - &id030
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.net.keepConnected:
+    get:
+      operationId: set_netRemote_sys_net_keepConnected
+      tags:
+      - System
+      summary: Set netRemote.sys.net.keepConnected
+      description: Keep the network connection alive during standby.
+      parameters:
+      - *id030
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wired.interfaceEnable:
+    get:
+      operationId: get_netRemote_sys_net_wired_interfaceEnable
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wired.interfaceEnable
+      description: Whether the Ethernet interface is enabled.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wired.macAddress:
+    get:
+      operationId: get_netRemote_sys_net_wired_macAddress
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wired.macAddress
+      description: Ethernet MAC address.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.connectedSSID:
+    get:
+      operationId: get_netRemote_sys_net_wlan_connectedSSID
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.connectedSSID
+      description: SSID of the currently connected WiFi network.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.interfaceEnable:
+    get:
+      operationId: get_netRemote_sys_net_wlan_interfaceEnable
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.interfaceEnable
+      description: Whether the WiFi interface is enabled.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.macAddress:
+    get:
+      operationId: get_netRemote_sys_net_wlan_macAddress
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.macAddress
+      description: WiFi MAC address.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.performFCC:
+    get:
+      operationId: get_netRemote_sys_net_wlan_performFCC
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.performFCC
+      description: FCC compliance test mode. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.performWPS:
+    get:
+      operationId: get_netRemote_sys_net_wlan_performWPS
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.performWPS
+      description: Activates WiFi Protected Setup. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.region:
+    get:
+      operationId: get_netRemote_sys_net_wlan_region
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.region
+      description: Wireless regulatory region setting. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.regionFcc:
+    get:
+      operationId: get_netRemote_sys_net_wlan_regionFcc
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.regionFcc
+      description: FCC region-specific configuration. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.rssi:
+    get:
+      operationId: get_netRemote_sys_net_wlan_rssi
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.rssi
+      description: WiFi signal strength indicator.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.scan:
+    get:
+      operationId: get_netRemote_sys_net_wlan_scan
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.scan
+      description: Initiates a WiFi network scan. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.sys.net.wlan.scanList/{index}:
+    get:
+      operationId: list_netRemote_sys_net_wlan_scanList
+      tags:
+      - System
+      summary: List netRemote.sys.net.wlan.scanList
+      description: Results of a WiFi network scan.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.selectAP:
+    get:
+      operationId: get_netRemote_sys_net_wlan_selectAP
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.selectAP
+      description: Selects a WiFi access point. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.setAuthType:
+    get:
+      operationId: get_netRemote_sys_net_wlan_setAuthType
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.setAuthType
+      description: Authentication method of the (to be) connected WiFi network. (Not documented upstream
+        — access mode assumed as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.setEncType:
+    get:
+      operationId: get_netRemote_sys_net_wlan_setEncType
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.setEncType
+      description: Encryption protocol of the (to be) connected WiFi network. (Not documented upstream
+        — access mode assumed as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.setFccTestChanNum:
+    get:
+      operationId: get_netRemote_sys_net_wlan_setFccTestChanNum
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.setFccTestChanNum
+      description: FCC test channel number. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.setFccTestDataRate:
+    get:
+      operationId: get_netRemote_sys_net_wlan_setFccTestDataRate
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.setFccTestDataRate
+      description: FCC test data transmission rate. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.setFccTestTxDataPattern:
+    get:
+      operationId: get_netRemote_sys_net_wlan_setFccTestTxDataPattern
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.setFccTestTxDataPattern
+      description: FCC test transmission data pattern. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.setFccTestTxPower:
+    get:
+      operationId: get_netRemote_sys_net_wlan_setFccTestTxPower
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.setFccTestTxPower
+      description: FCC test transmission power level. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.setFccTxOff:
+    get:
+      operationId: get_netRemote_sys_net_wlan_setFccTxOff
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.setFccTxOff
+      description: Turns off FCC test transmission. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.setPassphrase:
+    get:
+      operationId: get_netRemote_sys_net_wlan_setPassphrase
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.setPassphrase
+      description: Sets the WiFi network passphrase. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.setSSID:
+    get:
+      operationId: get_netRemote_sys_net_wlan_setSSID
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.setSSID
+      description: Sets/selects the WiFi network SSID. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.net.wlan.wpsPinRead:
+    get:
+      operationId: get_netRemote_sys_net_wlan_wpsPinRead
+      tags:
+      - System
+      summary: Get netRemote.sys.net.wlan.wpsPinRead
+      description: Reads back the WPS PIN. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.power:
+    get:
+      operationId: get_netRemote_sys_power
+      tags:
+      - System
+      summary: Get netRemote.sys.power
+      description: 'Power state: 0 = standby, 1 = active.'
+      parameters:
+      - &id031
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.power:
+    get:
+      operationId: set_netRemote_sys_power
+      tags:
+      - System
+      summary: Set netRemote.sys.power
+      description: 'Power state: 0 = standby, 1 = active.'
+      parameters:
+      - *id031
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.sleep:
+    get:
+      operationId: get_netRemote_sys_sleep
+      tags:
+      - System
+      summary: Get netRemote.sys.sleep
+      description: Sleep timer countdown in seconds (0 = disabled).
+      parameters:
+      - &id032
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.sys.sleep:
+    get:
+      operationId: set_netRemote_sys_sleep
+      tags:
+      - System
+      summary: Set netRemote.sys.sleep
+      description: Sleep timer countdown in seconds (0 = disabled).
+      parameters:
+      - *id032
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u32).
+        schema: *id007
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.state:
+    get:
+      operationId: get_netRemote_sys_state
+      tags:
+      - System
+      summary: Get netRemote.sys.state
+      description: General system state. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.rsa.publicKey:
+    get:
+      operationId: get_netRemote_sys_rsa_publicKey
+      tags:
+      - System
+      summary: Get netRemote.sys.rsa.publicKey
+      description: RSA public key used for WiFi password encryption.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.rsa.status:
+    get:
+      operationId: get_netRemote_sys_rsa_status
+      tags:
+      - System
+      summary: Get netRemote.sys.rsa.status
+      description: 'RSA key generation status: 0 = generating, 1 = ready.'
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.sys.ipod.dockStatus:
+    get:
+      operationId: get_netRemote_sys_ipod_dockStatus
+      tags:
+      - System
+      summary: Get netRemote.sys.ipod.dockStatus
+      description: iPod dock connection status. (Not documented upstream — access mode assumed as read-only;
+        verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.platform.softApUpdate.updateModeStatus:
+    get:
+      operationId: get_netRemote_platform_softApUpdate_updateModeStatus
+      tags:
+      - Platform
+      summary: Get netRemote.platform.softApUpdate.updateModeStatus
+      description: Status of the soft-AP update mode. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.platform.softApUpdate.updateModeRequest:
+    get:
+      operationId: get_netRemote_platform_softApUpdate_updateModeRequest
+      tags:
+      - Platform
+      summary: Get netRemote.platform.softApUpdate.updateModeRequest
+      description: Requests entry into soft-AP update mode. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.misc.fsDebug.component:
+    get:
+      operationId: get_netRemote_misc_fsDebug_component
+      tags:
+      - Misc / Debug
+      summary: Get netRemote.misc.fsDebug.component
+      description: Selects a component for debug tracing. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.misc.fsDebug.traceLevel:
+    get:
+      operationId: get_netRemote_misc_fsDebug_traceLevel
+      tags:
+      - Misc / Debug
+      summary: Get netRemote.misc.fsDebug.traceLevel
+      description: Configures debug trace verbosity. (Not documented upstream — access mode assumed as
+        read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.test.iperf.console:
+    get:
+      operationId: get_netRemote_test_iperf_console
+      tags:
+      - Test
+      summary: Get netRemote.test.iperf.console
+      description: iperf network performance test console. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.test.iperf.commandLine:
+    get:
+      operationId: get_netRemote_test_iperf_commandLine
+      tags:
+      - Test
+      summary: Get netRemote.test.iperf.commandLine
+      description: Command line for an iperf network performance test. (Not documented upstream — access
+        mode assumed as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.test.iperf.execute:
+    get:
+      operationId: get_netRemote_test_iperf_execute
+      tags:
+      - Test
+      summary: Get netRemote.test.iperf.execute
+      description: Executes an iperf network performance test. (Not documented upstream — access mode
+        assumed as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.spotify.username:
+    get:
+      operationId: get_netRemote_spotify_username
+      tags:
+      - Spotify
+      summary: Get netRemote.spotify.username
+      description: Spotify account identifier. Only available on devices with Spotify support. (Not documented
+        upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.spotify.lastError:
+    get:
+      operationId: get_netRemote_spotify_lastError
+      tags:
+      - Spotify
+      summary: Get netRemote.spotify.lastError
+      description: Most recent error from the Spotify integration. Only available on devices with Spotify
+        support. (Not documented upstream — access mode assumed as read-only; verify against a real device
+        before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.spotify.status:
+    get:
+      operationId: get_netRemote_spotify_status
+      tags:
+      - Spotify
+      summary: Get netRemote.spotify.status
+      description: Current Spotify connectivity state. Only available on devices with Spotify support.
+        (Not documented upstream — access mode assumed as read-only; verify against a real device before
+        relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.spotify.bitRate:
+    get:
+      operationId: get_netRemote_spotify_bitRate
+      tags:
+      - Spotify
+      summary: Get netRemote.spotify.bitRate
+      description: Audio streaming quality for Spotify playback. Only available on devices with Spotify
+        support. (Not documented upstream — access mode assumed as read-only; verify against a real device
+        before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.airplay.clearPassword:
+    get:
+      operationId: get_netRemote_airplay_clearPassword
+      tags:
+      - AirPlay
+      summary: Get netRemote.airplay.clearPassword
+      description: Removes the stored AirPlay access credential. Only available on devices with AirPlay
+        support. (Not documented upstream — access mode assumed as read-only; verify against a real device
+        before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.airplay.setPassword:
+    get:
+      operationId: get_netRemote_airplay_setPassword
+      tags:
+      - AirPlay
+      summary: Get netRemote.airplay.setPassword
+      description: Sets the AirPlay access credential. Only available on devices with AirPlay support.
+        (Not documented upstream — access mode assumed as read-only; verify against a real device before
+        relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.caps.maxClients:
+    get:
+      operationId: get_netRemote_multiroom_caps_maxClients
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.caps.maxClients
+      description: Maximum number of devices that can join a multiroom group.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.caps.protocolVersion:
+    get:
+      operationId: get_netRemote_multiroom_caps_protocolVersion
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.caps.protocolVersion
+      description: Multiroom protocol version.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.client.status{clientIndex}:
+    get:
+      operationId: get_netRemote_multiroom_client_statusclientIndex
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.client.status{clientIndex}
+      description: Connection/operational state of the client at the given index.
+      parameters:
+      - name: clientIndex
+        in: path
+        required: true
+        description: Zero-based index of the multiroom client this node refers to.
+        schema:
+          type: integer
+          minimum: 0
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/LIST_GET_NEXT/netRemote.multiroom.device.listAll/{index}:
+    get:
+      operationId: list_netRemote_multiroom_device_listAll
+      tags:
+      - Multiroom
+      summary: List netRemote.multiroom.device.listAll
+      description: Other multiroom-capable devices discoverable on the network.
+      parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based index to continue listing after (-1 to start from the beginning).
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/pin'
+      - name: maxItems
+        in: query
+        required: true
+        description: Maximum number of list entries to return in this page.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: A page of list entries.
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/ListGetNextResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.device.listAllVersion:
+    get:
+      operationId: get_netRemote_multiroom_device_listAllVersion
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.device.listAllVersion
+      description: Version of the device listing.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.device.serverStatus:
+    get:
+      operationId: get_netRemote_multiroom_device_serverStatus
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.device.serverStatus
+      description: Whether this device acts as a multiroom server.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.device.clientStatus:
+    get:
+      operationId: get_netRemote_multiroom_device_clientStatus
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.device.clientStatus
+      description: Connection status for client devices in the group. (Not documented upstream — access
+        mode assumed as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.device.clientIndex:
+    get:
+      operationId: get_netRemote_multiroom_device_clientIndex
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.device.clientIndex
+      description: Position/index of this device as a client.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.device.transportOptimisation:
+    get:
+      operationId: get_netRemote_multiroom_device_transportOptimisation
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.device.transportOptimisation
+      description: Transport optimization setting between devices.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.group.becomeServer:
+    get:
+      operationId: set_netRemote_multiroom_group_becomeServer
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.group.becomeServer
+      description: Makes this device the group's primary controller.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.group.removeClient:
+    get:
+      operationId: set_netRemote_multiroom_group_removeClient
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.group.removeClient
+      description: Removes a device from the multiroom group.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.group.streamable:
+    get:
+      operationId: get_netRemote_multiroom_group_streamable
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.group.streamable
+      description: Whether the group can currently stream audio.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.group.create:
+    get:
+      operationId: set_netRemote_multiroom_group_create
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.group.create
+      description: Creates a new multiroom group.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.group.addClient:
+    get:
+      operationId: set_netRemote_multiroom_group_addClient
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.group.addClient
+      description: Adds a device to an existing multiroom group.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.group.attachedClients:
+    get:
+      operationId: get_netRemote_multiroom_group_attachedClients
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.group.attachedClients
+      description: Devices currently joined to the group. (Not documented upstream — access mode assumed
+        as read-only; verify against a real device before relying on this.)
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.group.destroy:
+    get:
+      operationId: set_netRemote_multiroom_group_destroy
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.group.destroy
+      description: Disbands the multiroom group.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (unknown).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.group.name:
+    get:
+      operationId: get_netRemote_multiroom_group_name
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.group.name
+      description: Name of the multiroom group.
+      parameters:
+      - &id033
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.group.name:
+    get:
+      operationId: set_netRemote_multiroom_group_name
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.group.name
+      description: Name of the multiroom group.
+      parameters:
+      - *id033
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (c8_array).
+        schema: *id025
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.group.id:
+    get:
+      operationId: get_netRemote_multiroom_group_id
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.group.id
+      description: Unique identifier of the multiroom group.
+      parameters:
+      - $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.group.state:
+    get:
+      operationId: get_netRemote_multiroom_group_state
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.group.state
+      description: 'Role status: 0 = independent, 1 = client, 2 = server.'
+      parameters:
+      - &id034
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.group.state:
+    get:
+      operationId: set_netRemote_multiroom_group_state
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.group.state
+      description: 'Role status: 0 = independent, 1 = client, 2 = server.'
+      parameters:
+      - *id034
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.client.volume{clientIndex}:
+    get:
+      operationId: get_netRemote_multiroom_client_volumeclientIndex
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.client.volume{clientIndex}
+      description: Volume level of the client at the given index.
+      parameters:
+      - &id035
+        name: clientIndex
+        in: path
+        required: true
+        description: Zero-based index of the multiroom client this node refers to.
+        schema:
+          type: integer
+          minimum: 0
+      - &id036
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.client.volume{clientIndex}:
+    get:
+      operationId: set_netRemote_multiroom_client_volumeclientIndex
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.client.volume{clientIndex}
+      description: Volume level of the client at the given index.
+      parameters:
+      - *id035
+      - *id036
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.client.mute{clientIndex}:
+    get:
+      operationId: get_netRemote_multiroom_client_muteclientIndex
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.client.mute{clientIndex}
+      description: Mute toggle of the client at the given index.
+      parameters:
+      - &id037
+        name: clientIndex
+        in: path
+        required: true
+        description: Zero-based index of the multiroom client this node refers to.
+        schema:
+          type: integer
+          minimum: 0
+      - &id038
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.client.mute{clientIndex}:
+    get:
+      operationId: set_netRemote_multiroom_client_muteclientIndex
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.client.mute{clientIndex}
+      description: Mute toggle of the client at the given index.
+      parameters:
+      - *id037
+      - *id038
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/GET/netRemote.multiroom.group.masterVolume:
+    get:
+      operationId: get_netRemote_multiroom_group_masterVolume
+      tags:
+      - Multiroom
+      summary: Get netRemote.multiroom.group.masterVolume
+      description: Volume control affecting all group members simultaneously.
+      parameters:
+      - &id039
+        $ref: '#/components/parameters/pin'
+      responses:
+        '200':
+          description: Node value returned (see status for the outcome).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/GetResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+  /fsapi/SET/netRemote.multiroom.group.masterVolume:
+    get:
+      operationId: set_netRemote_multiroom_group_masterVolume
+      tags:
+      - Multiroom
+      summary: Set netRemote.multiroom.group.masterVolume
+      description: Volume control affecting all group members simultaneously.
+      parameters:
+      - *id039
+      - name: value
+        in: query
+        required: true
+        description: New value to assign (u8).
+        schema: *id004
+      responses:
+        '200':
+          description: Write attempted; check status (FS_OK, FS_FAIL, FS_PACKET_BAD, FS_NODE_BLOCKED,
+            ...).
+          content:
+            text/xml:
+              schema:
+                $ref: '#/components/schemas/FsapiResponse'
+        '403':
+          description: Forbidden – PIN missing or incorrect.
+        '404':
+          description: Not Found – unknown node or invalid path.
+components:
+  securitySchemes:
+    pinAuth:
+      type: apiKey
+      in: query
+      name: pin
+      description: Device PIN, sent on every request.
+    sessionAuth:
+      type: apiKey
+      in: query
+      name: sid
+      description: Session-ID previously obtained from CREATE_SESSION. Only needed for GET_NOTIFIES.
+  parameters:
+    pin:
+      name: pin
+      in: query
+      required: true
+      description: Device PIN used to authenticate the request.
+      schema:
+        type: string
+    sid:
+      name: sid
+      in: query
+      required: true
+      description: Active Session-ID obtained from CREATE_SESSION.
+      schema:
+        type: string
+    node:
+      name: node
+      in: path
+      required: true
+      description: Dotted FSAPI node path identifying the value to read/write, e.g. `netRemote.sys.info.friendlyName`.
+      schema:
+        type: string
+  schemas:
+    Status:
+      type: string
+      description: Outcome of an FSAPI request.
+      enum:
+      - FS_OK
+      - FS_FAIL
+      - FS_PACKET_BAD
+      - FS_NODE_BLOCKED
+      - FS_NODE_DOES_NOT_EXIST
+      - FS_TIMEOUT
+      - FS_LIST_END
+      x-enum-descriptions:
+        FS_OK: Command executed successfully; value is valid.
+        FS_FAIL: Supplied value does not satisfy the node's validation rules.
+        FS_PACKET_BAD: SET attempted on a read-only node.
+        FS_NODE_BLOCKED: SET attempted on a node that is inactive for the current operation mode.
+        FS_NODE_DOES_NOT_EXIST: The requested node does not exist.
+        FS_TIMEOUT: The request exceeded the allowed duration.
+        FS_LIST_END: No further entries remain in the list.
+    FsapiResponse:
+      type: object
+      description: Common envelope returned by every FSAPI call.
+      properties:
+        status:
+          $ref: '#/components/schemas/Status'
+      required:
+      - status
+    CreateSessionResponse:
+      allOf:
+      - $ref: '#/components/schemas/FsapiResponse'
+      - type: object
+        properties:
+          sessionId:
+            type: string
+            description: Newly issued Session-ID.
+        required:
+        - sessionId
+    NodeValue:
+      type: object
+      description: Typed scalar value as returned by GET/SET/list fields. Exactly one of the typed properties
+        is present, matching the node's declared FSAPI type.
+      properties:
+        u8:
+          type: integer
+          description: Unsigned 8-bit integer value.
+        u16:
+          type: integer
+          description: Unsigned 16-bit integer value.
+        u32:
+          type: integer
+          description: Unsigned 32-bit integer value.
+        s8:
+          type: integer
+          description: Signed 8-bit integer value.
+        s16:
+          type: integer
+          description: Signed 16-bit integer value.
+        s32:
+          type: integer
+          description: Signed 32-bit integer value.
+        e8:
+          type: integer
+          description: Enumerated value (index into the node's enum table).
+        c8_array:
+          type: string
+          description: UTF-8 string / binary-as-text value.
+    GetResponse:
+      allOf:
+      - $ref: '#/components/schemas/FsapiResponse'
+      - type: object
+        properties:
+          value:
+            $ref: '#/components/schemas/NodeValue'
+    ListItemField:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Field name within the list item (e.g. "name", "key").
+        value:
+          $ref: '#/components/schemas/NodeValue'
+    ListItem:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Index/key of this item within the list.
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListItemField'
+    ListGetNextResponse:
+      allOf:
+      - $ref: '#/components/schemas/FsapiResponse'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/ListItem'
+          listend:
+            type: boolean
+            description: True once the end of the list has been reached.
+    NotifyResponse:
+      allOf:
+      - $ref: '#/components/schemas/FsapiResponse'
+      - type: object
+        properties:
+          notifications:
+            type: array
+            description: Nodes whose value changed since the last poll.
+            items:
+              type: object
+              properties:
+                node:
+                  type: string
+                  description: Dotted node path that changed.
+                value:
+                  $ref: '#/components/schemas/NodeValue'

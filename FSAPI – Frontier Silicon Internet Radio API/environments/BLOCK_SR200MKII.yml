@@ -1,0 +1,30 @@
+name: BLOCK_SR200MKII
+variables:
+  - name: baseUrl
+    value: http://{{deviceHost}}
+  - name: deviceHost
+    value: 192.168.192.82
+  - name: pin
+    value: "1234"
+  - name: mode.Internet_Radio
+    value: 0
+  - name: mode.Spotify
+    value: 1
+  - name: mode.UPNP_Stream
+    value: 2
+  - name: mode.Musik_abspielen
+    value: 3
+  - name: mode.DAB+
+    value: 4
+  - name: mode.UKW
+    value: 5
+  - name: mode.CD
+    value: 6
+  - name: mode.Bluetooth
+    value: 7
+  - name: mode.AUX
+    value: 8
+  - name: mode.Optical
+    value: 9
+  - name: mode.RCA
+    value: 10

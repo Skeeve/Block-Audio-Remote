@@ -1,0 +1,78 @@
+info:
+  name: Get netRemote.sys.caps.extStaticDelayMax
+  type: http
+  seq: 29
+  tags:
+    - System
+
+http:
+  method: GET
+  url: "{{baseUrl}}/fsapi/GET/netRemote.sys.caps.extStaticDelayMax?pin={{pin}}"
+  params:
+    - name: pin
+      value: "{{pin}}"
+      type: query
+      description: Device PIN used to authenticate the request.
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+examples:
+  - name: 200 Response
+    description: Node value returned (see status for the outcome).
+    request:
+      url: "{{baseUrl}}/fsapi/GET/netRemote.sys.caps.extStaticDelayMax"
+      method: GET
+      params:
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: text/xml
+      body:
+        type: xml
+        data: ""
+  - name: 403 Response
+    description: Forbidden – PIN missing or incorrect.
+    request:
+      url: "{{baseUrl}}/fsapi/GET/netRemote.sys.caps.extStaticDelayMax"
+      method: GET
+      params:
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+    response:
+      status: 403
+      statusText: Forbidden
+      body:
+        type: text
+        data: ""
+  - name: 404 Response
+    description: Not Found – unknown node or invalid path.
+    request:
+      url: "{{baseUrl}}/fsapi/GET/netRemote.sys.caps.extStaticDelayMax"
+      method: GET
+      params:
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+    response:
+      status: 404
+      statusText: Not Found
+      body:
+        type: text
+        data: ""
+
+docs: Maximum external static delay value. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)

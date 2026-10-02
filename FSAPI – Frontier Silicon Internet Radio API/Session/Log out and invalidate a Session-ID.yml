@@ -1,0 +1,66 @@
+info:
+  name: Log out and invalidate a Session-ID
+  type: http
+  seq: 2
+  tags:
+    - Session
+
+http:
+  method: GET
+  url: "{{baseUrl}}/fsapi/DELETE_SESSION"
+  params:
+    - name: sid
+      value: ""
+      type: query
+      description: Active Session-ID obtained from CREATE_SESSION.
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+examples:
+  - name: 200 Response
+    description: Session deleted (or status explains why not).
+    request:
+      url: "{{baseUrl}}/fsapi/DELETE_SESSION"
+      method: GET
+      params:
+        - name: sid
+          value: ""
+          type: query
+          description: Active Session-ID obtained from CREATE_SESSION.
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: text/xml
+      body:
+        type: xml
+        data: |-
+          <?xml version="1.0" encoding="UTF-8"?>
+          <root>
+            <status>FS_OK</status>
+          </root>
+  - name: 404 Response
+    description: Not Found – `sid` is unknown/invalid or path is invalid.
+    request:
+      url: "{{baseUrl}}/fsapi/DELETE_SESSION"
+      method: GET
+      params:
+        - name: sid
+          value: ""
+          type: query
+          description: Active Session-ID obtained from CREATE_SESSION.
+    response:
+      status: 404
+      statusText: Not Found
+      body:
+        type: text
+        data: ""
+
+docs: Destroys the given session so its `sid` can no longer be used.

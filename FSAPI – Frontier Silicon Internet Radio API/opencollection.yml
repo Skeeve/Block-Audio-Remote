@@ -1,0 +1,19 @@
+opencollection: 1.0.0
+
+info:
+  name: FSAPI – Frontier Silicon Internet Radio API
+
+docs:
+  content: |-
+    OpenAPI description of the Frontier Silicon FSAPI, covering session handling (CREATE_SESSION, DELETE_SESSION, GET_NOTIFIES) and the full node reference (Navigation, Playback, System, Platform, Misc/Debug, Test, Spotify, AirPlay, Multiroom), as documented at https://ex-frontier.hexdocs.pm/fsapi.html.
+
+    Authentication: every request accepts the device PIN as the `pin` query parameter. A session (`sid`, obtained once from CREATE_SESSION) is an alternative to sending the PIN on every call, but is optional — all node operations below are modeled using `pin` directly for simplicity, since a device only keeps one session active at a time anyway and re-sending the PIN avoids session-invalidation issues entirely.
+
+    Node coverage note: many nodes (especially under System, Spotify, AirPlay, Test, Misc and Platform) are marked as undocumented/TODO in the upstream reference itself — those are still included here (as GET operations) but flagged in their description so you know the access mode is a best guess, not confirmed. Nodes documented as list-type are exposed via LIST_GET_NEXT instead of GET. Indexed multiroom client nodes (originally suffixed `X` in the docs) are modeled with a path parameter instead.
+  type: text/markdown
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

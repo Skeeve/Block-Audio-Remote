@@ -1,0 +1,11 @@
+info:
+  name: Platform
+  type: folder
+  seq: 6
+
+request:
+  auth: inherit
+
+docs:
+  content: netRemote.platform.* nodes.
+  type: text/markdown

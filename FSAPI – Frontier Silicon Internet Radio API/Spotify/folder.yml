@@ -1,0 +1,11 @@
+info:
+  name: Spotify
+  type: folder
+  seq: 9
+
+request:
+  auth: inherit
+
+docs:
+  content: Only available on devices with Spotify support. netRemote.spotify.* nodes.
+  type: text/markdown

@@ -22,12 +22,13 @@ Weboberfläche des Radios einblenden.
 
 ## Dateien
 
-| Datei                 | Zweck                                                                 |
-|-----------------------|-----------------------------------------------------------------------|
-| `blockradio.html`     | Die eigentliche Fernbedienung (HTML/CSS/JS, eigenständig lauffähig)   |
-| `injector.js`         | Userscript-Vorlage mit Platzhalter für die Base64-kodierte HTML-Datei |
-| `build-injector.sh`   | Baut aus beiden Dateien das fertige Userscript                        |
-| `blockradio.user.js`  | Generiertes Userscript (nicht von Hand bearbeiten)                    |
+|               Datei/Verzeichnis               |                                                       Zweck                                                       |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `blockradio.html`                             | Die eigentliche Fernbedienung (HTML/CSS/JS, eigenständig lauffähig)                                               |
+| `injector.js`                                 | Userscript-Vorlage mit Platzhalter für die Base64-kodierte HTML-Datei                                             |
+| `build-injector.sh`                           | Baut aus beiden Dateien das fertige Userscript                                                                    |
+| `blockradio.user.js`                          | Generiertes Userscript (nicht von Hand bearbeiten)                                                                |
+| `FSAPI – Frontier Silicon Internet Radio API` | [Bruno](https://www.usebruno.com) Collection der [FSAPI Documentation](https://ex-frontier.hexdocs.pm/fsapi.html) |
 
 ## Nutzung
 

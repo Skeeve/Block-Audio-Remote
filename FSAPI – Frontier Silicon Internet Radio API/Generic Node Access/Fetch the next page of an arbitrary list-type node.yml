@@ -1,0 +1,126 @@
+info:
+  name: Fetch the next page of an arbitrary list-type node
+  type: http
+  seq: 3
+  tags:
+    - Generic Node Access
+
+http:
+  method: GET
+  url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/:node/:index"
+  params:
+    - name: node
+      value: ""
+      type: path
+      description: Dotted FSAPI node path identifying the value to read/write, e.g. `netRemote.sys.info.friendlyName`.
+    - name: index
+      value: ""
+      type: path
+      description: Zero-based index to continue listing after (-1 to start from the beginning).
+    - name: pin
+      value: "{{pin}}"
+      type: query
+      description: Device PIN used to authenticate the request.
+    - name: maxItems
+      value: "1"
+      type: query
+      description: Maximum number of list entries to return in this page.
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+examples:
+  - name: 200 Response
+    description: A page of list entries.
+    request:
+      url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/:node/:index"
+      method: GET
+      params:
+        - name: node
+          value: ""
+          type: path
+          description: Dotted FSAPI node path identifying the value to read/write, e.g. `netRemote.sys.info.friendlyName`.
+        - name: index
+          value: ""
+          type: path
+          description: Zero-based index to continue listing after (-1 to start from the beginning).
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: maxItems
+          value: "1"
+          type: query
+          description: Maximum number of list entries to return in this page.
+    response:
+      status: 200
+      statusText: OK
+      headers:
+        - name: Content-Type
+          value: text/xml
+      body:
+        type: xml
+        data: ""
+  - name: 403 Response
+    description: Forbidden – PIN missing or incorrect.
+    request:
+      url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/:node/:index"
+      method: GET
+      params:
+        - name: node
+          value: ""
+          type: path
+          description: Dotted FSAPI node path identifying the value to read/write, e.g. `netRemote.sys.info.friendlyName`.
+        - name: index
+          value: ""
+          type: path
+          description: Zero-based index to continue listing after (-1 to start from the beginning).
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: maxItems
+          value: "1"
+          type: query
+          description: Maximum number of list entries to return in this page.
+    response:
+      status: 403
+      statusText: Forbidden
+      body:
+        type: text
+        data: ""
+  - name: 404 Response
+    description: Not Found – unknown node or invalid path.
+    request:
+      url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/:node/:index"
+      method: GET
+      params:
+        - name: node
+          value: ""
+          type: path
+          description: Dotted FSAPI node path identifying the value to read/write, e.g. `netRemote.sys.info.friendlyName`.
+        - name: index
+          value: ""
+          type: path
+          description: Zero-based index to continue listing after (-1 to start from the beginning).
+        - name: pin
+          value: ""
+          type: query
+          description: Device PIN used to authenticate the request.
+        - name: maxItems
+          value: "1"
+          type: query
+          description: Maximum number of list entries to return in this page.
+    response:
+      status: 404
+      statusText: Not Found
+      body:
+        type: text
+        data: ""
+
+docs: Generic fallback for any list node not covered by the category-specific requests below.
