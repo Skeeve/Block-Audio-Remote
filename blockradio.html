@@ -124,7 +124,7 @@
         <div style="margin-bottom: 8px; font-size: 0.85rem; color: #8e8e93;">Wiedergabe</div>
         <div class="playback-controls">
             <button onclick="sendControl('netRemote.play.control', '4')" title="Zurück">⏮</button>
-            <button onclick="sendControl('netRemote.play.control', '1')" title="Play">▶</button>
+            <button onclick="playWithRestore()" title="Play">▶</button>
             <button onclick="sendControl('netRemote.play.control', '2')" title="Pause">⏸</button>
             <button onclick="sendControl('netRemote.play.control', '3')" title="Weiter">⏭</button>
         </div>
@@ -328,76 +328,138 @@
 
 <!-- Block 3c: DLNA-Browser & Filter-Funktion -->
 <script>
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    // Klickpfad ab "Home" und zuletzt gespielter Titel. Damit kann die App die
+    // Playlist neu ansteuern, wenn das Radio nach dem Einschalten nicht mehr
+    // weiß, wo es war. Wird im localStorage gehalten, damit es einen Reload übersteht.
+    function loadStored(key, fallback) {
+        try {
+            const v = localStorage.getItem(key);
+            return v ? JSON.parse(v) : fallback;
+        } catch (e) { return fallback; }
+    }
+    function store(key, value) {
+        try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+    }
+    let navPath = loadStored('blockradio.navPath', []);    // [{key, name}, ...]
+    let lastTrack = loadStored('blockradio.lastTrack', null); // {index, name}
+
+    // Statusanzeige im Listenfenster (ersetzt den Inhalt, bis die Liste neu geladen ist)
+    function showListStatus(text, detail = "") {
+        const listContainer = document.getElementById('dlna-browser-list');
+        listContainer.innerHTML = "";
+        const box = document.createElement('div');
+        box.style.cssText = "font-size:0.8rem; color:#8e8e93; text-align:center; padding:10px;";
+        const main = document.createElement('div');
+        main.style.color = "#ffffff";
+        main.innerText = text;
+        box.appendChild(main);
+        if (detail) {
+            const sub = document.createElement('div');
+            sub.style.marginTop = "4px";
+            sub.innerText = detail;
+            box.appendChild(sub);
+        }
+        listContainer.appendChild(box);
+    }
+
+    // Hinweiszeile oben über der (bereits geladenen) Liste
+    function showListNotice(text) {
+        const listContainer = document.getElementById('dlna-browser-list');
+        const note = document.createElement('div');
+        note.style.cssText = "font-size:0.8rem; color:#ff3b30; text-align:center; padding:8px; border-bottom:1px solid #3a3a3c;";
+        note.innerText = text;
+        listContainer.prepend(note);
+    }
+
+    // Liest das aktuelle Verzeichnis des Radios komplett ein (alle Seiten).
+    // onProgress(anzahl) wird nach jeder geladenen Seite aufgerufen.
+    async function fetchNavListItems(onProgress = null) {
+        let allItems = [];
+        let currentOffset = -1; 
+        let hasMore = true;
+        let loopSafety = 0;
+        let blockedRetries = 0;
+        let seenKeys = new Set();
+
+        while (hasMore && loopSafety < 200) {
+            loopSafety++;
+
+            let response = await fetch(`http://${radioIP}/fsapi/LIST_GET_NEXT/netRemote.nav.list/${currentOffset}?pin=${pin}&maxItems=30`);
+            let xmlText = await response.text();
+
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+            const status = xmlDoc.querySelector("status")?.textContent.trim();
+
+            // Das Radio holt große Verzeichnisse blockweise (je 100 Einträge) vom
+            // DLNA-Server nach. Während es nachlädt, meldet es FS_NODE_BLOCKED bzw.
+            // FS_TIMEOUT – dann kurz warten und denselben Offset erneut anfragen.
+            if (status === "FS_NODE_BLOCKED" || status === "FS_TIMEOUT") {
+                if (++blockedRetries > 20) break;
+                await new Promise(r => setTimeout(r, 500));
+                continue;
+            }
+            blockedRetries = 0;
+
+            const items = xmlDoc.querySelectorAll("item");
+
+            if (items.length === 0) {
+                hasMore = false;
+                break;
+            }
+
+            let newItemsCount = 0;
+            let lastValidKey = null;
+
+            items.forEach(item => {
+                const key = item.getAttribute("key");
+                lastValidKey = key; 
+
+                if (!seenKeys.has(key)) {
+                    seenKeys.add(key);
+                    allItems.push(item);
+                    newItemsCount++;
+                }
+            });
+            if (onProgress) onProgress(allItems.length);
+
+            // Eine kurze Antwort (z.B. nur Keys 90–99) heißt NICHT, dass die Liste zu
+            // Ende ist – das Radio liefert nur bis zur Grenze seines 100er-Puffers.
+            // Echtes Ende wird über <listend/> signalisiert.
+            const listEnd = xmlDoc.querySelector("listend") !== null;
+            if (listEnd || newItemsCount === 0) {
+                hasMore = false;
+            } else if (lastValidKey !== null) {
+                currentOffset = lastValidKey;
+            }
+        }
+        return allItems;
+    }
+
+    function getItemName(item) {
+        const nameNode = item.querySelector("field[name='name'] c8_array");
+        const titleNode = item.querySelector("field[name='title'] c8_array");
+        return titleNode ? titleNode.textContent : (nameNode ? nameNode.textContent : "");
+    }
+
     async function loadDLNAList() {
         const listContainer = document.getElementById('dlna-browser-list');
         try {
             await setFSAPI('netRemote.nav.state', '1');
             
-            listContainer.innerHTML = "";
+            const loadingText = restoringPlaylist ? "Playlist wird neu angesteuert..." : "Lade Liste...";
+            showListStatus(loadingText);
             globalTotalTracks = 0; 
             
             // NEU: Suchfeld bei jedem echten Verzeichniswechsel automatisch leeren
             const searchInput = document.getElementById('input-dlna-search');
             if (searchInput) searchInput.value = "";
 
-            let allItems = [];
-            let currentOffset = -1; 
-            let hasMore = true;
-            let loopSafety = 0;
-            let blockedRetries = 0;
-            let seenKeys = new Set();
-
-            while (hasMore && loopSafety < 200) {
-                loopSafety++;
-
-                let response = await fetch(`http://${radioIP}/fsapi/LIST_GET_NEXT/netRemote.nav.list/${currentOffset}?pin=${pin}&maxItems=30`);
-                let xmlText = await response.text();
-
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-                const status = xmlDoc.querySelector("status")?.textContent.trim();
-
-                // Das Radio holt große Verzeichnisse blockweise (je 100 Einträge) vom
-                // DLNA-Server nach. Während es nachlädt, meldet es FS_NODE_BLOCKED bzw.
-                // FS_TIMEOUT – dann kurz warten und denselben Offset erneut anfragen.
-                if (status === "FS_NODE_BLOCKED" || status === "FS_TIMEOUT") {
-                    if (++blockedRetries > 20) break;
-                    await new Promise(r => setTimeout(r, 500));
-                    continue;
-                }
-                blockedRetries = 0;
-
-                const items = xmlDoc.querySelectorAll("item");
-
-                if (items.length === 0) {
-                    hasMore = false;
-                    break;
-                }
-
-                let newItemsCount = 0;
-                let lastValidKey = null;
-
-                items.forEach(item => {
-                    const key = item.getAttribute("key");
-                    lastValidKey = key; 
-
-                    if (!seenKeys.has(key)) {
-                        seenKeys.add(key);
-                        allItems.push(item);
-                        newItemsCount++;
-                    }
-                });
-
-                // Eine kurze Antwort (z.B. nur Keys 90–99) heißt NICHT, dass die Liste zu
-                // Ende ist – das Radio liefert nur bis zur Grenze seines 100er-Puffers.
-                // Echtes Ende wird über <listend/> signalisiert.
-                const listEnd = xmlDoc.querySelector("listend") !== null;
-                if (listEnd || newItemsCount === 0) {
-                    hasMore = false;
-                } else if (lastValidKey !== null) {
-                    currentOffset = lastValidKey;
-                }
-            }
+            const allItems = await fetchNavListItems(
+                n => showListStatus(loadingText, `${n} Einträge geladen`));
+            listContainer.innerHTML = "";
 
             if (allItems.length === 0) {
                 listContainer.innerHTML = `<div style="font-size:0.8rem; color:#8e8e93; text-align:center; padding:10px;">Verzeichnis leer oder DLNA nicht aktiv.</div>`;
@@ -408,10 +470,7 @@
 
             allItems.forEach(item => {
                 const key = item.getAttribute("key");
-                const nameNode = item.querySelector("field[name='name'] c8_array");
-                const titleNode = item.querySelector("field[name='title'] c8_array");
-                
-                const name = titleNode ? titleNode.textContent : (nameNode ? nameNode.textContent : "");
+                const name = getItemName(item);
                 
                 const typeNode = item.querySelector("field[name='type'] value, field[name='type'] u8");
                 const subTypeNode = item.querySelector("field[name='subtype'] value, field[name='subtype'] u8");
@@ -430,6 +489,7 @@
                 if (!isDirectory) {
                     row.setAttribute("data-songname", name.trim().toLowerCase());
                     row.setAttribute("data-trackindex", trackIndexCounter);
+                    row.setAttribute("data-key", key);
                     currentItemTrackIndex = trackIndexCounter;
                     trackIndexCounter++;
                 }
@@ -480,6 +540,8 @@
     }
 
     async function resetDLNAHome() {
+        navPath = [];
+        store('blockradio.navPath', navPath);
         await setFSAPI('netRemote.nav.state', '0');
         await new Promise(r => setTimeout(r, 300));
         await setFSAPI('netRemote.nav.state', '1');
@@ -487,13 +549,98 @@
         loadDLNAList();
     }
 
+    // Fährt den gespeicherten Klickpfad ab "Home" erneut ab und startet den
+    // zuletzt gespielten Titel. Ordner werden über den Namen gesucht, da sich
+    // die Keys nach einem Neustart des Radios ändern können.
+    let restoringPlaylist = false;
+    async function restorePlaylistPosition() {
+        if (restoringPlaylist || navPath.length === 0 || !lastTrack) return false;
+        restoringPlaylist = true;
+        const heading = "Playlist wird neu angesteuert...";
+        showListStatus(heading, "Home");
+        try {
+            await setFSAPI('netRemote.nav.state', '0');
+            await sleep(300);
+            await setFSAPI('netRemote.nav.state', '1');
+            await sleep(400);
+
+            for (const [i, step] of navPath.entries()) {
+                showListStatus(heading, `Ordner ${i + 1}/${navPath.length}: ${step.name}`);
+                let items = [];
+                for (let i = 0; i < 5 && items.length === 0; i++) {
+                    items = await fetchNavListItems();
+                    if (items.length === 0) await sleep(1000);
+                }
+                const byName = items.filter(it => getItemName(it).trim() === step.name.trim());
+                const match = byName.find(it => it.getAttribute("key") === String(step.key)) || byName[0];
+                if (!match) {
+                    console.warn(`Ordner "${step.name}" nicht gefunden – Wiederherstellung abgebrochen.`);
+                    restoringPlaylist = false;
+                    await loadDLNAList();
+                    showListNotice(`Ordner „${step.name}“ nicht gefunden – bitte neu auswählen.`);
+                    return false;
+                }
+                step.key = match.getAttribute("key");
+                console.log(`Wiederherstellung: öffne Ordner ${step.name}`);
+                await setFSAPI('netRemote.nav.action.navigate', step.key);
+                await sleep(1200);
+            }
+            store('blockradio.navPath', navPath);
+
+            let loaded = await loadDLNAList();
+            if (!loaded) { await sleep(1000); loaded = await loadDLNAList(); }
+            if (!loaded) {
+                showListStatus("Playlist konnte nicht geladen werden.");
+                return false;
+            }
+
+            // Erst die gemerkte Position prüfen, sonst über den Namen suchen
+            let row = document.querySelector(`.dlna-item[data-trackindex="${lastTrack.index}"]`);
+            if (!row || row.getAttribute('data-songname') !== lastTrack.name) {
+                row = document.querySelector(`.dlna-item[data-songname="${CSS.escape(lastTrack.name)}"]`);
+            }
+            if (!row) {
+                console.warn(`Titel "${lastTrack.name}" nicht gefunden.`);
+                showListNotice(`Titel „${lastTrack.name}“ nicht gefunden.`);
+                return false;
+            }
+            const idx = parseInt(row.getAttribute('data-trackindex'));
+            await navigateDLNA(row.getAttribute('data-key'), false, idx, row.getAttribute('data-songname'));
+            return true;
+        } finally {
+            restoringPlaylist = false;
+        }
+    }
+
+    // Play-Taste: erst normal abspielen; spielt das Radio danach nicht, den
+    // Klickpfad neu abfahren. netRemote.play.status: 1 = Puffern, 2 = Spielt,
+    // 4 = Nachpuffern; alles andere heißt, es läuft nichts.
+    async function playWithRestore() {
+        await setFSAPI('netRemote.play.control', '1');
+        let status = null;
+        for (let i = 0; i < 8; i++) {
+            await sleep(500);
+            status = parseInt(await fetchFSAPI('netRemote.play.status'));
+            if (status === 2) break;
+        }
+        if (![1, 2, 4].includes(status)) {
+            console.log(`Play ohne Wirkung (play.status=${status}) – steuere Playlist neu an.`);
+            await restorePlaylistPosition();
+        }
+        updateNowPlaying();
+    }
+
     async function navigateDLNA(key, isDirectory, trackIndex, songName) {
         if (key === 'back') {
+            navPath.pop();
+            store('blockradio.navPath', navPath);
             await setFSAPI('netRemote.nav.action.navigate', '-1');
             await new Promise(r => setTimeout(r, 400));
             loadDLNAList();
         } else if (isDirectory) {
             console.log(`Öffne Ordner: ${songName}`);
+            navPath.push({ key: key, name: songName });
+            store('blockradio.navPath', navPath);
             await setFSAPI('netRemote.nav.action.navigate', key);
             await new Promise(r => setTimeout(r, 1200));
             let success = await loadDLNAList();
@@ -505,6 +652,8 @@
             console.log(`Spiele Musikstück: ${songName} auf Index ${trackIndex}`);
             
             if (trackIndex !== null) {
+                lastTrack = { index: parseInt(trackIndex), name: songName.trim().toLowerCase() };
+                store('blockradio.lastTrack', lastTrack);
                 absoluteConfirmedIndex = parseInt(trackIndex);
                 possibleCandidateIndices = [absoluteConfirmedIndex];
                 lastProcessedTitle = songName.trim();
@@ -572,6 +721,15 @@
                 possibleCandidateIndices = [absoluteConfirmedIndex];
             } else {
                 possibleCandidateIndices = targetIndices;
+            }
+        }
+
+        if (absoluteConfirmedIndex !== null) {
+            const row = document.querySelector(`.dlna-item[data-trackindex="${absoluteConfirmedIndex}"]`);
+            const name = row ? row.getAttribute('data-songname') : null;
+            if (name && (!lastTrack || lastTrack.index !== absoluteConfirmedIndex || lastTrack.name !== name)) {
+                lastTrack = { index: absoluteConfirmedIndex, name: name };
+                store('blockradio.lastTrack', lastTrack);
             }
         }
 
