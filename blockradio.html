@@ -344,18 +344,31 @@
             let currentOffset = -1; 
             let hasMore = true;
             let loopSafety = 0;
-            let seenKeys = new Set(); 
+            let blockedRetries = 0;
+            let seenKeys = new Set();
 
-            while (hasMore && loopSafety < 20) {
+            while (hasMore && loopSafety < 200) {
                 loopSafety++;
-                
+
                 let response = await fetch(`http://${radioIP}/fsapi/LIST_GET_NEXT/netRemote.nav.list/${currentOffset}?pin=${pin}&maxItems=30`);
                 let xmlText = await response.text();
-                
+
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                const status = xmlDoc.querySelector("status")?.textContent.trim();
+
+                // Das Radio holt große Verzeichnisse blockweise (je 100 Einträge) vom
+                // DLNA-Server nach. Während es nachlädt, meldet es FS_NODE_BLOCKED bzw.
+                // FS_TIMEOUT – dann kurz warten und denselben Offset erneut anfragen.
+                if (status === "FS_NODE_BLOCKED" || status === "FS_TIMEOUT") {
+                    if (++blockedRetries > 20) break;
+                    await new Promise(r => setTimeout(r, 500));
+                    continue;
+                }
+                blockedRetries = 0;
+
                 const items = xmlDoc.querySelectorAll("item");
-                
+
                 if (items.length === 0) {
                     hasMore = false;
                     break;
@@ -375,7 +388,11 @@
                     }
                 });
 
-                if (items.length < 30 || newItemsCount === 0) {
+                // Eine kurze Antwort (z.B. nur Keys 90–99) heißt NICHT, dass die Liste zu
+                // Ende ist – das Radio liefert nur bis zur Grenze seines 100er-Puffers.
+                // Echtes Ende wird über <listend/> signalisiert.
+                const listEnd = xmlDoc.querySelector("listend") !== null;
+                if (listEnd || newItemsCount === 0) {
                     hasMore = false;
                 } else if (lastValidKey !== null) {
                     currentOffset = lastValidKey;
