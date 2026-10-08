@@ -25,16 +25,26 @@ else
     BASE64_CONTENT=$(base64 -i "$HTML_FILE" | tr -d '\r\n')
 fi
 
+# Version aus dem Zeitstempel des letzten Commits (UTC), damit derselbe Stand
+# immer dieselbe Version ergibt. Ohne Git: aktuelle Uhrzeit.
+VERSION=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y.%m.%d.%H%M 2>/dev/null)
+if [ -z "$VERSION" ]; then
+    VERSION=$(date -u +%Y.%m.%d.%H%M)
+fi
+echo "🏷️  Version: $VERSION"
+
 echo "🔧 Verschmelze $BOILERPLATE_FILE mit dem Base64-Code zu $OUTPUT_FILE..."
 
 # Wir nutzen Python3, um die Boilerplate einzulesen, den Platzhalter zu ersetzen und das fertige Skript zu schreiben
 export B64_INJECT="$BASE64_CONTENT"
+export VERSION_INJECT="$VERSION"
 python3 -c "
 import os
 with open('$BOILERPLATE_FILE', 'r', encoding='utf-8') as f:
     text = f.read()
 # Ersetzt den Platzhalter in deiner injector.js durch die Base64-Kette
 text = text.replace('HIER_DEINE_BASE64_KETTE_EINFUEGEN', os.environ['B64_INJECT'])
+text = text.replace('HIER_DIE_VERSION_EINFUEGEN', os.environ['VERSION_INJECT'])
 with open('$OUTPUT_FILE', 'w', encoding='utf-8') as f:
     f.write(text)
 "

@@ -1,0 +1,35 @@
+name: Userscript bauen
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - blockradio.html
+      - injector.js
+      - build-injector.sh
+      - .github/workflows/build-userscript.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Injector bauen
+        run: bash build-injector.sh
+
+      - name: blockradio.user.js committen, falls geändert
+        run: |
+          if git diff --quiet -- blockradio.user.js; then
+            echo "blockradio.user.js ist unverändert."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898799+github-actions[bot]@users.noreply.github.com"
+          git add blockradio.user.js
+          git commit -m "build: blockradio.user.js aktualisiert [skip ci]"
+          git push
