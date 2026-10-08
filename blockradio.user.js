@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Block Audio Remote Injector (Base64)
-// @version      2026.10.02.0546
+// @version      2026.10.08.1219
 // @updateURL    https://github.com/Skeeve/Block-Audio-Remote/raw/main/blockradio.user.js
 // @downloadURL  https://github.com/Skeeve/Block-Audio-Remote/raw/main/blockradio.user.js
 // @match        http://*/web/index.html
