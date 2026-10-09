@@ -795,13 +795,15 @@
         const detailEl = document.getElementById('info-detail');
         
         try {
-            const [trackName, artist, album, trackDetail, graphicUri] = await Promise.all([
+            const [trackName, artist, album, trackDetail, graphicUri, power] = await Promise.all([
                 fetchFSAPI('netRemote.play.info.name'),
                 fetchFSAPI('netRemote.play.info.artist'),
                 fetchFSAPI('netRemote.play.info.album'),
                 fetchFSAPI('netRemote.play.info.text'),
-                fetchFSAPI('netRemote.play.info.graphicUri')
+                fetchFSAPI('netRemote.play.info.graphicUri'),
+                fetchFSAPI('netRemote.sys.power')
             ]);
+            syncPowerState(power);
 
             let cleanLiveTitle = (trackName && trackName.trim() !== "") ? trackName.trim() : "";
             if (cleanLiveTitle === "" && trackDetail && trackDetail.trim() !== "") {
@@ -894,7 +896,21 @@
         }
     }
 
+    // Übernimmt den Power-Zustand des Radios, damit auch Ein-/Ausschalten am
+    // Gerät in der App ankommt.
+    function syncPowerState(powerText) {
+        if (powerText === null) return;
+        const apiPowerState = parseInt(powerText);
+        if (isNaN(apiPowerState) || apiPowerState === currentPowerState) return;
+        currentPowerState = apiPowerState;
+        userWantsPowerOn = (apiPowerState === 1);
+        updatePowerButtonUI();
+    }
+
     async function keepRadioAlive() {
+        // Den Zustand frisch holen: Ist das Radio im Standby, würde das Play
+        // unten es halb aufwecken (sys.power = 1 bei dunklem Display).
+        syncPowerState(await fetchFSAPI('netRemote.sys.power'));
         if (currentPowerState === 1) {
             const keepAliveEnabled = document.getElementById('chk-keepalive').checked;
             if (!keepAliveEnabled) return; 
