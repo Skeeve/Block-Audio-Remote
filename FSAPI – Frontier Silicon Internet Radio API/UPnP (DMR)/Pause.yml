@@ -1,0 +1,39 @@
+info:
+  name: Pause
+  type: http
+  seq: 6
+  tags:
+    - UPnP
+
+http:
+  method: POST
+  url: "{{upnpBaseUrl}}/AVTransport/control"
+  headers:
+    - name: Content-Type
+      value: text/xml; charset="utf-8"
+    - name: SOAPACTION
+      value: '"urn:schemas-upnp-org:service:AVTransport:1#Pause"'
+  body:
+    type: xml
+    data: |-
+      <?xml version="1.0" encoding="utf-8"?>
+      <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+        <s:Body>
+          <u:Pause xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:Pause>
+        </s:Body>
+      </s:Envelope>
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+docs: |-
+  Pausiert die Wiedergabe (Zustand `PAUSED_PLAYBACK`).
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): nicht ausgeführt

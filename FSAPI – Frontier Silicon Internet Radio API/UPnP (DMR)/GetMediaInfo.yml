@@ -1,0 +1,39 @@
+info:
+  name: GetMediaInfo
+  type: http
+  seq: 10
+  tags:
+    - UPnP
+
+http:
+  method: POST
+  url: "{{upnpBaseUrl}}/AVTransport/control"
+  headers:
+    - name: Content-Type
+      value: text/xml; charset="utf-8"
+    - name: SOAPACTION
+      value: '"urn:schemas-upnp-org:service:AVTransport:1#GetMediaInfo"'
+  body:
+    type: xml
+    data: |-
+      <?xml version="1.0" encoding="utf-8"?>
+      <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+        <s:Body>
+          <u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><InstanceID>0</InstanceID></u:GetMediaInfo>
+        </s:Body>
+      </s:Envelope>
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+docs: |-
+  Aktuelle und vorgemerkte URL (`CurrentURI`, `NextURI`) samt Metadaten sowie Anzahl Titel (`NrTracks`, 0 oder 1).
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): HTTP 200, `CurrentURI` leer

@@ -1,0 +1,31 @@
+info:
+  name: Get dd.xml (Gerätebeschreibung)
+  type: http
+  seq: 1
+  tags:
+    - UPnP
+
+http:
+  method: GET
+  url: "{{upnpBaseUrl}}/dd.xml"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+docs: |-
+  UPnP-Gerätebeschreibung. Enthält unter anderem:
+  - `friendlyName`: `Block SR200MKII <MAC>`
+  - `modelDescription`: Firmware-Version (`ir-mmi-FS2026-0500-0564_V2.14.24c.EX81334-1B12`)
+  - `UDN`: UUID, endet auf die MAC-Adresse
+  - `X_Features`: `Spotify, AudioSync, DAB, FM, IR, Aux-In, Media, DMR`
+  - `serviceList`: die URLs der drei Dienste
+  - `magicPacketWakeSupported = 0`: kein Wake-on-LAN
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): HTTP 200

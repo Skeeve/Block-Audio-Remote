@@ -1,0 +1,20 @@
+info:
+  name: UPnP (DMR)
+  type: folder
+  seq: 12
+
+request:
+  auth: inherit
+
+docs:
+  content: |-
+    UPnP/DLNA-Schnittstelle des Radios. Das ist kein FSAPI, sondern ein zweiter Steuerkanal auf Port 8080.
+
+    Das Radio meldet sich als DLNA Digital Media Renderer (`MediaRenderer:1`, `DMR-1.50`). Die Gerätebeschreibung liegt unter `/dd.xml`. Die Dienste sind `AVTransport` (Wiedergabe), `RenderingControl` (Lautstärke/Mute) und `ConnectionManager` (Formate). Ihre Befehlslisten liegen jeweils unter `/<Dienst>/scpd.xml`.
+
+    Alle Steuer-Requests sind SOAP-POSTs an `/<Dienst>/control` mit dem Header `SOAPACTION: "urn:schemas-upnp-org:service:<Dienst>:1#<Aktion>"`. Eine PIN braucht UPnP nicht. `InstanceID` ist immer `0`.
+
+    Typischer Ablauf, um eine Stream-URL abzuspielen: `SetAVTransportURI` → `Play`. Das Radio wechselt dabei selbst in den DMR-Modus (FSAPI `netRemote.sys.mode` = `{{mode.UPNP_Stream}}`). Senderlogo und Senderinfos aus dem Internetradio-Modus fehlen dann.
+
+    Aus dem Browser heraus scheitern die SOAP-POSTs vermutlich an CORS. Ein Userscript bräuchte dafür `GM_xmlhttpRequest`.
+  type: text/markdown

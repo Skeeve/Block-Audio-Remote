@@ -1,0 +1,41 @@
+info:
+  name: GetVolume
+  type: http
+  seq: 12
+  tags:
+    - UPnP
+
+http:
+  method: POST
+  url: "{{upnpBaseUrl}}/RenderingControl/control"
+  headers:
+    - name: Content-Type
+      value: text/xml; charset="utf-8"
+    - name: SOAPACTION
+      value: '"urn:schemas-upnp-org:service:RenderingControl:1#GetVolume"'
+  body:
+    type: xml
+    data: |-
+      <?xml version="1.0" encoding="utf-8"?>
+      <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+        <s:Body>
+          <u:GetVolume xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1"><InstanceID>0</InstanceID><Channel>Master</Channel></u:GetVolume>
+        </s:Body>
+      </s:Envelope>
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+docs: |-
+  Liest die Lautstärke (0–100).
+
+  Die Skala unterscheidet sich von der FSAPI: `netRemote.sys.audio.volume` hat 33 Stufen (0–32, siehe `netRemote.sys.caps.volumeSteps`). Beobachtet: FSAPI 16 ↔ UPnP 50. Die Umrechnung ist nur an diesem einen Wert geprüft.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): HTTP 200, `CurrentVolume` 50
