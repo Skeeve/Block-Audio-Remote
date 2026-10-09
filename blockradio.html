@@ -226,6 +226,9 @@
 <!-- Block 3b: Power, Volume & Wiedergabe-Befehle (Mit Skip-Spurverfolgung) -->
 <script>
     let userWantsPowerOn = false;
+    // Während togglePower() läuft, darf die Status-Abfrage den Zustand nicht
+    // überschreiben, sonst kippt sie userWantsPowerOn mitten im Schalten.
+    let powerToggleInProgress = false;
 
     function updatePowerButtonUI() {
         const btn = document.getElementById('btn-power');
@@ -245,9 +248,15 @@
         btn.innerText = targetState === 1 ? "Wecke Hardware..." : "Schalte aus...";
         btn.className = "power-toggle"; 
 
+        powerToggleInProgress = true;
         try {
             if (targetState === 1) {
                 userWantsPowerOn = true;
+                // Aus dem Standby (z. B. nach Auto-Standby) reicht power=1
+                // allein nicht: Das Radio meldet dann 1, das Display bleibt
+                // aber dunkel. Erst ein Aus/An-Zyklus weckt es zuverlässig.
+                await setFSAPI('netRemote.sys.power', '0');
+                await new Promise(r => setTimeout(r, 3000));
                 await setFSAPI('netRemote.sys.power', '1');
                 await new Promise(r => setTimeout(r, 300));
                 await setFSAPI('netRemote.play.control', '1');
@@ -279,6 +288,8 @@
         } catch (e) {
             console.error("Fehler beim Schalten:", e);
             initStatus();
+        } finally {
+            powerToggleInProgress = false;
         }
     }
 
@@ -899,7 +910,7 @@
     // Übernimmt den Power-Zustand des Radios, damit auch Ein-/Ausschalten am
     // Gerät in der App ankommt.
     function syncPowerState(powerText) {
-        if (powerText === null) return;
+        if (powerText === null || powerToggleInProgress) return;
         const apiPowerState = parseInt(powerText);
         if (isNaN(apiPowerState) || apiPowerState === currentPowerState) return;
         currentPowerState = apiPowerState;
