@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Current playback state (buffering/playing/paused).
+docs: |-
+  Current playback state (buffering/playing/paused).
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

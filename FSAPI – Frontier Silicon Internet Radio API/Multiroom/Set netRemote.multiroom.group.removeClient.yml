@@ -1,5 +1,5 @@
 info:
-  name: Set netRemote.multiroom.group.removeClient
+  name: "- Set netRemote.multiroom.group.removeClient"
   type: http
   seq: 11
   tags:
@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Removes a device from the multiroom group.
+docs: |-
+  Removes a device from the multiroom group.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST (per GET geprüft)

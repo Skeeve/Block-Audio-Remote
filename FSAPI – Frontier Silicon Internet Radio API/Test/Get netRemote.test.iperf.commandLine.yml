@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.test.iperf.commandLine
+  name: "- Get netRemote.test.iperf.commandLine"
   type: http
   seq: 2
   tags:
@@ -78,4 +78,6 @@ examples:
 docs: |-
   Command line for an iperf network performance test. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
 
-  FS_NODE_DOES_NOT_EXIST
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

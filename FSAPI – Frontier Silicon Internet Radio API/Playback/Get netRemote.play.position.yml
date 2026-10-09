@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Playback position in milliseconds.
+docs: |-
+  Playback position in milliseconds.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

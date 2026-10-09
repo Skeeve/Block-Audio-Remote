@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.test.iperf.execute
+  name: "- Get netRemote.test.iperf.execute"
   type: http
   seq: 3
   tags:
@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Executes an iperf network performance test. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+docs: |-
+  Executes an iperf network performance test. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

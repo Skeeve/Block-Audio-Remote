@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Selects a WiFi access point. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+docs: |-
+  Selects a WiFi access point. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

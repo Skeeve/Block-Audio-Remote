@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.sys.net.wlan.setFccTestDataRate
+  name: "- Get netRemote.sys.net.wlan.setFccTestDataRate"
   type: http
   seq: 96
   tags:
@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: FCC test data transmission rate. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+docs: |-
+  FCC test data transmission rate. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

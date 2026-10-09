@@ -1,5 +1,5 @@
 info:
-  name: Set netRemote.multiroom.group.addClient
+  name: "- Set netRemote.multiroom.group.addClient"
   type: http
   seq: 14
   tags:
@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Adds a device to an existing multiroom group.
+docs: |-
+  Adds a device to an existing multiroom group.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST (per GET geprüft)

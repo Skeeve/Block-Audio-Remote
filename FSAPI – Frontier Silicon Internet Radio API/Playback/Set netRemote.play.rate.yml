@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Playback speed multiplier.
+docs: |-
+  Playback speed multiplier.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (Node existiert, per GET geprüft; Schreiben nicht getestet)

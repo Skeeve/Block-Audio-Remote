@@ -107,4 +107,9 @@ examples:
         type: text
         data: ""
 
-docs: Stored favorite radio stations, retrieved via pagination.
+docs: |-
+  Stored favorite radio stations, retrieved via pagination.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_BLOCKED (im Modus „Musik abspielen“; evtl. nur in einem passenden Modus verfügbar)

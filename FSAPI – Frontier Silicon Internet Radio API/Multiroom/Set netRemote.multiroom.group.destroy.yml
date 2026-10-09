@@ -1,5 +1,5 @@
 info:
-  name: Set netRemote.multiroom.group.destroy
+  name: "- Set netRemote.multiroom.group.destroy"
   type: http
   seq: 16
   tags:
@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Disbands the multiroom group.
+docs: |-
+  Disbands the multiroom group.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST (per GET geprüft)

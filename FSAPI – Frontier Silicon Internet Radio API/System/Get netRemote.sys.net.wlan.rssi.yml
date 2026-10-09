@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: WiFi signal strength indicator.
+docs: |-
+  WiFi signal strength indicator.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

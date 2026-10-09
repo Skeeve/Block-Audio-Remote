@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.sys.net.wlan.setPassphrase
+  name: "- Get netRemote.sys.net.wlan.setPassphrase"
   type: http
   seq: 100
   tags:
@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Sets the WiFi network passphrase. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+docs: |-
+  Sets the WiFi network passphrase. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

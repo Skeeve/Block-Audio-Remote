@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.multiroom.client.volume{clientIndex}
+  name: "- Get netRemote.multiroom.client.volume{clientIndex}"
   type: http
   seq: 22
   tags:
@@ -91,4 +91,9 @@ examples:
         type: text
         data: ""
 
-docs: Volume level of the client at the given index.
+docs: |-
+  Volume level of the client at the given index.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

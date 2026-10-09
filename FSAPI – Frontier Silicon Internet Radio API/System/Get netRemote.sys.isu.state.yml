@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: "Update state: 0 = idle, 1 = searching, 2 = complete."
+docs: |-
+  Update state: 0 = idle, 1 = searching, 2 = complete.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

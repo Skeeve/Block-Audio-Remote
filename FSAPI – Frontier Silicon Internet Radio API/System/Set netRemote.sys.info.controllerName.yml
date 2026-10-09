@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Name of the remote control application in use.
+docs: |-
+  Name of the remote control application in use.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (Node existiert, per GET geprüft; Schreiben nicht getestet)

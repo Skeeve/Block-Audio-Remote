@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Audio streaming quality for Spotify playback. Only available on devices with Spotify support. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+docs: |-
+  Audio streaming quality for Spotify playback. Only available on devices with Spotify support. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

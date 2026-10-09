@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Extended country code per ETSI TS 101 756.
+docs: |-
+  Extended country code per ETSI TS 101 756.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

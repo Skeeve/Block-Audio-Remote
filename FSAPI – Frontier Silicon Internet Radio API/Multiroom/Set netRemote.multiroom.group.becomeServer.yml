@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Makes this device the group's primary controller.
+docs: |-
+  Makes this device the group's primary controller.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (Node existiert, per GET geprüft; Schreiben nicht getestet)

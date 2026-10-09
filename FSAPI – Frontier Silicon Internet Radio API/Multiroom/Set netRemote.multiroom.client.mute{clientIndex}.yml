@@ -1,5 +1,5 @@
 info:
-  name: Set netRemote.multiroom.client.mute{clientIndex}
+  name: "- Set netRemote.multiroom.client.mute{clientIndex}"
   type: http
   seq: 25
   tags:
@@ -111,4 +111,9 @@ examples:
         type: text
         data: ""
 
-docs: Mute toggle of the client at the given index.
+docs: |-
+  Mute toggle of the client at the given index.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST (per GET geprüft)

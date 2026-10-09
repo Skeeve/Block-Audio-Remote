@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Maximum number of devices that can join a multiroom group.
+docs: |-
+  Maximum number of devices that can join a multiroom group.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

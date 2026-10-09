@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Time synchronization source selection.
+docs: |-
+  Time synchronization source selection.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.multiroom.device.serverStatus
+  name: "- Get netRemote.multiroom.device.serverStatus"
   type: http
   seq: 6
   tags:
@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Whether this device acts as a multiroom server.
+docs: |-
+  Whether this device acts as a multiroom server.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

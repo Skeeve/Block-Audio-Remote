@@ -1,5 +1,5 @@
 info:
-  name: Set netRemote.sys.info.radioPin
+  name: "- Set netRemote.sys.info.radioPin"
   type: http
   seq: 56
   tags:
@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: PIN credential used for API access control.
+docs: |-
+  PIN credential used for API access control.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST (per GET geprüft)

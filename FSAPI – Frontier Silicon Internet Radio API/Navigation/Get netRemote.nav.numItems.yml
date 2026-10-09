@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Total number of entries in the current menu.
+docs: |-
+  Total number of entries in the current menu.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (nur mit nav.state=1, sonst FS_NODE_BLOCKED)

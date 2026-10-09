@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.sys.audio.eqLoudness
+  name: "- Get netRemote.sys.audio.eqLoudness"
   type: http
   seq: 16
   tags:
@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Loudness enhancement toggle for the active custom EQ.
+docs: |-
+  Loudness enhancement toggle for the active custom EQ.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

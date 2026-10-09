@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Internet radio auto-play behavior flag.
+docs: |-
+  Internet radio auto-play behavior flag.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (Node existiert, per GET geprüft; Schreiben nicht getestet)

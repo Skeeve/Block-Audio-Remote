@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Selects the current menu entry or returns to the parent level.
+docs: |-
+  Selects the current menu entry or returns to the parent level.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (Node existiert, per GET geprüft; Schreiben nicht getestet)

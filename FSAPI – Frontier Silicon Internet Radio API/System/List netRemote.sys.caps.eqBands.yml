@@ -107,4 +107,9 @@ examples:
         type: text
         data: ""
 
-docs: Equalizer band configurations and ranges.
+docs: |-
+  Equalizer band configurations and ranges.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

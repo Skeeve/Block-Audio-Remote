@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Maximum volume level supported by the device.
+docs: |-
+  Maximum volume level supported by the device.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

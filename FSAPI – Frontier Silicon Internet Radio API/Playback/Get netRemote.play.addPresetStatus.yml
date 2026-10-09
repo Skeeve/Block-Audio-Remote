@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Status of adding the current station to favorites.
+docs: |-
+  Status of adding the current station to favorites.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

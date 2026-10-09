@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Bass adjustment for the custom EQ (range -7 to 7).
+docs: |-
+  Bass adjustment for the custom EQ (range -7 to 7).
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (Node existiert, per GET geprüft; Schreiben nicht getestet)

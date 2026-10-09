@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Initiates a scan for digital audio broadcast (DAB) channels.
+docs: |-
+  Initiates a scan for digital audio broadcast (DAB) channels.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

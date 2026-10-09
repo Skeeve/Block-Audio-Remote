@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Current local time (HHMMSS).
+docs: |-
+  Current local time (HHMMSS).
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

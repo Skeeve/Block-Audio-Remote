@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.sys.alarm.configChanged
+  name: "- Get netRemote.sys.alarm.configChanged"
   type: http
   seq: 4
   tags:
@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Indicates a change in alarm configuration. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+docs: |-
+  Indicates a change in alarm configuration. (Not documented upstream — access mode assumed as read-only; verify against a real device before relying on this.)
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

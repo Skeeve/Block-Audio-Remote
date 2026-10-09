@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.multiroom.device.clientIndex
+  name: "- Get netRemote.multiroom.device.clientIndex"
   type: http
   seq: 8
   tags:
@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Position/index of this device as a client.
+docs: |-
+  Position/index of this device as a client.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

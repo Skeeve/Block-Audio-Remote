@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: "RSA key generation status: 0 = generating, 1 = ready."
+docs: |-
+  RSA key generation status: 0 = generating, 1 = ready.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

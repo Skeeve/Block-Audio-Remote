@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Creates a new multiroom group.
+docs: |-
+  Creates a new multiroom group.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (Node existiert, per GET geprüft; Schreiben nicht getestet)

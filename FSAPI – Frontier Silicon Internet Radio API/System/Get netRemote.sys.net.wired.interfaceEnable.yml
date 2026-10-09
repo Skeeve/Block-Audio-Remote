@@ -75,4 +75,9 @@ examples:
         type: text
         data: ""
 
-docs: Whether the Ethernet interface is enabled.
+docs: |-
+  Whether the Ethernet interface is enabled.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

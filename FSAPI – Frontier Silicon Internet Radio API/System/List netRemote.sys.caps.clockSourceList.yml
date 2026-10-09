@@ -107,4 +107,9 @@ examples:
         type: text
         data: ""
 
-docs: Available time sources.
+docs: |-
+  Available time sources.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK

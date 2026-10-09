@@ -1,5 +1,5 @@
 info:
-  name: Set netRemote.multiroom.group.masterVolume
+  name: "- Set netRemote.multiroom.group.masterVolume"
   type: http
   seq: 27
   tags:
@@ -95,4 +95,9 @@ examples:
         type: text
         data: ""
 
-docs: Volume control affecting all group members simultaneously.
+docs: |-
+  Volume control affecting all group members simultaneously.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST (per GET geprüft)

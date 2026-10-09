@@ -1,5 +1,5 @@
 info:
-  name: Get netRemote.sys.alarm.current
+  name: "- Get netRemote.sys.alarm.current"
   type: http
   seq: 2
   tags:
@@ -80,4 +80,4 @@ docs: |-
 
   <br/>
 
-  FS_NODE_DOES_NOT_EXIST
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_NODE_DOES_NOT_EXIST

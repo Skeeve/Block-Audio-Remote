@@ -112,4 +112,4 @@ docs: |-
 
   <br/>
 
-  FS_NODE_BLOCKED
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (nur mit nav.state=1, sonst FS_NODE_BLOCKED)

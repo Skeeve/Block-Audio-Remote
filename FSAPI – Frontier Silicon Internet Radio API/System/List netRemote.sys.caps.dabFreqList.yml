@@ -107,4 +107,9 @@ examples:
         type: text
         data: ""
 
-docs: Available DAB frequency bands.
+docs: |-
+  Available DAB frequency bands.
+
+  <br/>
+
+  Getestet am BLOCK SR200 MKII (2026-10-09): FS_FAIL (im Modus „Musik abspielen“; evtl. nur in einem passenden Modus verfügbar)
