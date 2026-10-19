@@ -7,20 +7,20 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/netRemote.sys.caps.validModes/:index"
+  url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/netRemote.sys.caps.validModes/:index?pin={{pin}}&maxItems=65536"
   params:
-    - name: index
-      value: ""
-      type: path
-      description: Zero-based index to continue listing after (-1 to start from the beginning).
     - name: pin
       value: "{{pin}}"
       type: query
       description: Device PIN used to authenticate the request.
     - name: maxItems
-      value: "1"
+      value: "65536"
       type: query
       description: Maximum number of list entries to return in this page.
+    - name: index
+      value: "-1"
+      type: path
+      description: Zero-based index to continue listing after (-1 to start from the beginning).
   auth: inherit
 
 settings:
@@ -28,7 +28,6 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
-  forwardAuthorizationHeader: false
 
 examples:
   - name: 200 Response

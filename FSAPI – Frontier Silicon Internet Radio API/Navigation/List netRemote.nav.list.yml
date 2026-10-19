@@ -7,18 +7,16 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/netRemote.nav.list/:index?pin={{pin}}&maxItems=10"
+  url: "{{baseUrl}}/fsapi/LIST_GET_NEXT/netRemote.nav.list/:index?pin={{pin}}&maxItems=30"
   params:
     - name: pin
       value: "{{pin}}"
       type: query
-      description: Device PIN used to authenticate the request.
     - name: maxItems
-      value: "10"
+      value: "30"
       type: query
-      description: Maximum number of list entries to return in this page.
     - name: index
-      value: "20"
+      value: "89"
       type: path
       description: Zero-based index to continue listing after (-1 to start from the beginning).
   auth: inherit
@@ -28,7 +26,6 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
-  forwardAuthorizationHeader: false
 
 examples:
   - name: 200 Response
@@ -112,4 +109,4 @@ docs: |-
 
   <br/>
 
-  Getestet am BLOCK SR200 MKII (2026-10-09): FS_OK (nur mit nav.state=1, sonst FS_NODE_BLOCKED)
+  FS_NODE_BLOCKED
