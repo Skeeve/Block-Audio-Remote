@@ -193,7 +193,8 @@
     async function setFSAPI(path, value) {
         try {
             let response = await fetch(`http://${radioIP}/fsapi/SET/${path}?pin=${pin}&value=${value}`);
-            return response.ok;
+            // Fehler meldet das Radio mit HTTP 200 und z. B. FS_FAIL im Body
+            return response.ok && (await response.text()).includes('<status>FS_OK</status>');
         } catch (e) { return false; }
     }
 
@@ -353,8 +354,19 @@
     function store(key, value) {
         try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
     }
+    // navPath ist die aktuelle Stöber-Position, playlist der Ordner, aus dem
+    // zuletzt ein Titel gestartet wurde – nur den fährt die Wiederherstellung
+    // an. Das Radio selbst liefert keinen Pfad zum laufenden Titel.
     let navPath = loadStored('blockradio.navPath', []);    // [{key, name}, ...]
     let lastTrack = loadStored('blockradio.lastTrack', null); // {index, name}
+    let playlist = loadStored('blockradio.playlist', null);  // {path: [{key, name}], tracks: [name]}
+    if (!playlist && lastTrack && navPath.length > 0) {
+        // Stand vor der Trennung übernehmen; Titelliste ist noch unbekannt.
+        // Der alte Pfad kann nach einem Radio-Neustart verlängert worden sein
+        // (alter + neuer Pfad); gültig ist der Teil ab dem letzten Neubeginn.
+        const restart = navPath.map(s => s.name).lastIndexOf(navPath[0].name);
+        playlist = { path: navPath.slice(restart), tracks: null };
+    }
 
     // Statusanzeige im Listenfenster (ersetzt den Inhalt, bis die Liste neu geladen ist)
     function showListStatus(text, detail = "") {
@@ -565,7 +577,8 @@
     // die Keys nach einem Neustart des Radios ändern können.
     let restoringPlaylist = false;
     async function restorePlaylistPosition() {
-        if (restoringPlaylist || navPath.length === 0 || !lastTrack) return false;
+        if (restoringPlaylist || !playlist || playlist.path.length === 0 || !lastTrack) return false;
+        const path = playlist.path;
         restoringPlaylist = true;
         const heading = "Playlist wird neu angesteuert...";
         showListStatus(heading, "Home");
@@ -574,9 +587,11 @@
             await sleep(300);
             await setFSAPI('netRemote.nav.state', '1');
             await sleep(400);
+            navPath = [];
+            store('blockradio.navPath', navPath);
 
-            for (const [i, step] of navPath.entries()) {
-                showListStatus(heading, `Ordner ${i + 1}/${navPath.length}: ${step.name}`);
+            for (const [i, step] of path.entries()) {
+                showListStatus(heading, `Ordner ${i + 1}/${path.length}: ${step.name}`);
                 let items = [];
                 for (let i = 0; i < 5 && items.length === 0; i++) {
                     items = await fetchNavListItems();
@@ -595,8 +610,10 @@
                 console.log(`Wiederherstellung: öffne Ordner ${step.name}`);
                 await setFSAPI('netRemote.nav.action.navigate', step.key);
                 await sleep(1200);
+                navPath.push({ ...step });
+                store('blockradio.navPath', navPath);
             }
-            store('blockradio.navPath', navPath);
+            store('blockradio.playlist', playlist);
 
             let loaded = await loadDLNAList();
             if (!loaded) { await sleep(1000); loaded = await loadDLNAList(); }
@@ -641,19 +658,34 @@
         updateNowPlaying();
     }
 
+    // Gleicht navPath mit der Tiefe ab, die das Radio meldet. nav.depth ist
+    // direkt nach einer Navigation verlässlich (Anzahl Ordner - 1), auf Home
+    // aber veraltet – darum nur nach Navigation aufrufen. Ist navPath länger,
+    // hat das Radio zwischendurch (Standby, Neustart, Bedienung am Gerät) neu
+    // bei Home angefangen; gültig sind dann nur die letzten Einträge.
+    async function syncNavPath(path) {
+        const depth = parseInt(await fetchFSAPI('netRemote.nav.depth'));
+        if (isNaN(depth)) return path;
+        if (path.length > depth + 1) return path.slice(-(depth + 1));
+        if (path.length < depth + 1) return [];   // Anfang unbekannt
+        return path;
+    }
+
     async function navigateDLNA(key, isDirectory, trackIndex, songName) {
         if (key === 'back') {
-            navPath.pop();
-            store('blockradio.navPath', navPath);
             await setFSAPI('netRemote.nav.action.navigate', '-1');
             await new Promise(r => setTimeout(r, 400));
+            navPath = await syncNavPath(navPath.slice(0, -1));
+            store('blockradio.navPath', navPath);
             loadDLNAList();
         } else if (isDirectory) {
             console.log(`Öffne Ordner: ${songName}`);
-            navPath.push({ key: key, name: songName });
-            store('blockradio.navPath', navPath);
-            await setFSAPI('netRemote.nav.action.navigate', key);
+            // Erst navigieren, dann merken: ein nicht ausgeführter Klick darf
+            // nicht im Pfad landen.
+            if (!await setFSAPI('netRemote.nav.action.navigate', key)) return;
             await new Promise(r => setTimeout(r, 1200));
+            navPath = await syncNavPath([...navPath, { key: key, name: songName }]);
+            store('blockradio.navPath', navPath);
             let success = await loadDLNAList();
             if (!success) {
                 await new Promise(r => setTimeout(r, 1000));
@@ -663,6 +695,14 @@
             console.log(`Spiele Musikstück: ${songName} auf Index ${trackIndex}`);
             
             if (trackIndex !== null) {
+                // Heilt auch einen schon früher verlängerten Pfad
+                navPath = await syncNavPath(navPath);
+                store('blockradio.navPath', navPath);
+                const tracks = [...document.querySelectorAll('.dlna-item[data-songname]')]
+                    .map(row => row.getAttribute('data-songname'));
+                playlist = { path: navPath.map(s => ({ ...s })), tracks: tracks };
+                store('blockradio.playlist', playlist);
+                playlistMisses = 0;
                 lastTrack = { index: parseInt(trackIndex), name: songName.trim().toLowerCase() };
                 store('blockradio.lastTrack', lastTrack);
                 absoluteConfirmedIndex = parseInt(trackIndex);
@@ -684,6 +724,14 @@
     let absoluteConfirmedIndex = null; // Bestätigter, eindeutiger Song-Index (Ganzzahl)
     let possibleCandidateIndices = [];  // Array für unklare Indizes bei Doppelgängern
     let lastProcessedTitle = "";       // Speichert den Titel zur Erkennung eines Wechsels
+
+    // Zeigt die Liste gerade die gemerkte Playlist? Nur dann darf die
+    // Markierung lastTrack fortschreiben.
+    function showingPlaylist() {
+        if (!playlist) return false;
+        return playlist.path.length === navPath.length &&
+            playlist.path.every((s, i) => s.name === navPath[i].name);
+    }
 
     // Überprüft und visualisiert die Position auf Basis deines elastischen Abgleichs
     function highlightCurrentTrackInList() {
@@ -738,7 +786,7 @@
         if (absoluteConfirmedIndex !== null) {
             const row = document.querySelector(`.dlna-item[data-trackindex="${absoluteConfirmedIndex}"]`);
             const name = row ? row.getAttribute('data-songname') : null;
-            if (name && (!lastTrack || lastTrack.index !== absoluteConfirmedIndex || lastTrack.name !== name)) {
+            if (name && showingPlaylist() && (!lastTrack || lastTrack.index !== absoluteConfirmedIndex || lastTrack.name !== name)) {
                 lastTrack = { index: absoluteConfirmedIndex, name: name };
                 store('blockradio.lastTrack', lastTrack);
             }
@@ -806,13 +854,15 @@
         const detailEl = document.getElementById('info-detail');
         
         try {
-            const [trackName, artist, album, trackDetail, graphicUri, power] = await Promise.all([
+            const [trackName, artist, album, trackDetail, graphicUri, power, mode, playStatus] = await Promise.all([
                 fetchFSAPI('netRemote.play.info.name'),
                 fetchFSAPI('netRemote.play.info.artist'),
                 fetchFSAPI('netRemote.play.info.album'),
                 fetchFSAPI('netRemote.play.info.text'),
                 fetchFSAPI('netRemote.play.info.graphicUri'),
-                fetchFSAPI('netRemote.sys.power')
+                fetchFSAPI('netRemote.sys.power'),
+                fetchFSAPI('netRemote.sys.mode'),
+                fetchFSAPI('netRemote.play.status')
             ]);
             syncPowerState(power);
 
@@ -832,6 +882,8 @@
                 absoluteConfirmedIndex = null;
                 possibleCandidateIndices = [];
             }
+
+            checkPlaylistCurrent(cleanLiveTitle, mode, playStatus);
 
             if (graphicUri && graphicUri.trim() !== "") {
                 coverEl.src = graphicUri.startsWith('/') ? `http://${radioIP}${graphicUri}` : graphicUri;
@@ -905,6 +957,38 @@
             titleEl.innerText = "Keine Verbindung";
             document.getElementById('info-tracknumber').style.display = "none";
         }
+    }
+
+    // Prüft, ob der laufende Titel noch aus der gemerkten Playlist stammt.
+    // Wurde am Gerät oder per UNDOK eine andere Playlist gestartet, kann die
+    // App deren Pfad nicht erfahren – dann vergisst sie die alte, statt sie
+    // nach einem Neustart wieder anzusteuern. Nur im Musik-Modus (sys.mode 3)
+    // und bei laufender Wiedergabe (play.status 2); mehrere Fehlversuche in
+    // Folge, weil der alte Titel nach einem Wechsel noch kurz gemeldet wird.
+    let playlistMisses = 0;
+    function checkPlaylistCurrent(title, mode, playStatus) {
+        if (!playlist || !playlist.tracks || restoringPlaylist) return;
+        if (parseInt(mode) !== 3 || parseInt(playStatus) !== 2 || title === "") return;
+        const t = title.toLowerCase();
+        const hits = [];
+        playlist.tracks.forEach((n, i) => { if (n.includes(t) || t.includes(n)) hits.push(i); });
+        if (hits.length > 0) {
+            playlistMisses = 0;
+            // Auch beim Stöbern in anderen Ordnern die Position fortschreiben
+            if (hits.length === 1 && (!lastTrack || lastTrack.index !== hits[0])) {
+                lastTrack = { index: hits[0], name: playlist.tracks[hits[0]] };
+                store('blockradio.lastTrack', lastTrack);
+            }
+            return;
+        }
+        if (++playlistMisses < 3) return;
+        console.log(`"${title}" steht nicht in der gemerkten Playlist – vergesse sie.`);
+        playlist = null;
+        lastTrack = null;
+        store('blockradio.playlist', null);
+        store('blockradio.lastTrack', null);
+        playlistMisses = 0;
+        showListNotice("Playlist wurde außerhalb der App gewechselt – Play steuert sie nach einem Neustart nicht an.");
     }
 
     // Übernimmt den Power-Zustand des Radios, damit auch Ein-/Ausschalten am
