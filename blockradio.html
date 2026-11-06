@@ -135,6 +135,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div style="font-size: 0.85rem; color: #8e8e93;">DLNA Medien-Browser</div>
             <div style="display: flex; gap: 6px;">
+                <button onclick="showCurrentPlaylist()" title="Zur Playlist des laufenden Titels" style="font-size: 0.75rem; padding: 4px 8px; width: auto; background-color: #48484a;">🎶 Playlist</button>
                 <button onclick="resetDLNAHome()" style="font-size: 0.75rem; padding: 4px 8px; width: auto; background-color: #007aff;">🏠 Home</button>
                 <button onclick="navigateDLNA('back')" style="font-size: 0.75rem; padding: 4px 8px; width: auto; background-color: #48484a;">⌫ Zurück</button>
             </div>
@@ -562,6 +563,16 @@
         });
     }
 
+    // Button "Playlist": zurück zur Playlist des laufenden Titels
+    async function showCurrentPlaylist() {
+        if (!playlist || playlist.path.length === 0) {
+            showListNotice("Noch keine Playlist gemerkt – bitte einen Titel auswählen.");
+            return;
+        }
+        if (showingPlaylist()) return;
+        await restorePlaylistPosition(false);
+    }
+
     async function resetDLNAHome() {
         navPath = [];
         store('blockradio.navPath', navPath);
@@ -574,13 +585,16 @@
 
     // Fährt den gespeicherten Klickpfad ab "Home" erneut ab und startet den
     // zuletzt gespielten Titel. Ordner werden über den Namen gesucht, da sich
-    // die Keys nach einem Neustart des Radios ändern können.
+    // die Keys nach einem Neustart des Radios ändern können. Mit
+    // startTrack = false wird die Playlist nur angezeigt (Button "Playlist");
+    // das Umschalten von nav.state unterbricht die Wiedergabe nicht.
     let restoringPlaylist = false;
-    async function restorePlaylistPosition() {
-        if (restoringPlaylist || !playlist || playlist.path.length === 0 || !lastTrack) return false;
+    async function restorePlaylistPosition(startTrack = true) {
+        if (restoringPlaylist || !playlist || playlist.path.length === 0) return false;
+        if (startTrack && !lastTrack) return false;
         const path = playlist.path;
         restoringPlaylist = true;
-        const heading = "Playlist wird neu angesteuert...";
+        const heading = startTrack ? "Playlist wird neu angesteuert..." : "Playlist wird geöffnet...";
         showListStatus(heading, "Home");
         try {
             await setFSAPI('netRemote.nav.state', '0');
@@ -621,6 +635,7 @@
                 showListStatus("Playlist konnte nicht geladen werden.");
                 return false;
             }
+            if (!startTrack) return true;
 
             // Erst die gemerkte Position prüfen, sonst über den Namen suchen
             let row = document.querySelector(`.dlna-item[data-trackindex="${lastTrack.index}"]`);
